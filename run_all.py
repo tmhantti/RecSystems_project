@@ -6,12 +6,9 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+from pprint import pprint
 
-from plot_routines import (hist_user_count, hist_item_count, hist_ratings,
-                           plot_ratings_count) 
-
-# other libraries:
-# RecBole, Implicit, LightFM, Surprise, RecPack, Elliot, scikit-learn, PyTorch
+from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count) 
 
 # subfolder for plots:
 # (set to None to display plots on screen)
@@ -33,8 +30,6 @@ def main():
         movies = pd.read_csv(rel_path / "movies.dat", sep='::', header=None, engine='python', encoding='latin1')
     else: 
         raise FileNotFoundError(f"Subfolder '{rel_path}' was not found.") 
-    
-    # set column names:
     users.columns = ['UserID', 'Gender', 'Age', 'Occupation', 'Zip-code']
     ratings.columns = ['UserID', 'MovieID', 'Rating', 'Timestamp']
     movies.columns = ['MovieID', 'Title', 'Genres']
@@ -74,13 +69,6 @@ def main():
     # dates for the first and last ratings given:
     first_rating = ratings['Timestamp'].min()
     last_rating = ratings['Timestamp'].max()
-
-    print(f"* Number of users: {n_users}")
-    print(f"* Number of items: {n_items}")
-    print(f"* Number of interactions: {n_interact}")
-    print(f"* Density: {dens:.2f}%")
-    print(f"* Rating time span : {first_rating} - {last_rating}")
-
     # distribution of number of rankings / user
     user_counts = ratings['UserID'].value_counts()    
     # distribution of number of rankings / item
@@ -91,15 +79,31 @@ def main():
     # (scaled to 0-1 interval):
     timestamp_counts = ratings["Timestamp"].value_counts().sort_index()
     rating_cumsum = timestamp_counts.cumsum() / ratings["Timestamp"].count()
+    # quantiles:
+    quantiles = [0.05, 0.1, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
+    quantiles_df = pd.DataFrame({
+        "Users": user_counts.quantile(quantiles),
+        "Movies": item_counts.quantile(quantiles)
+    })
+    quantiles_df.index = [f"{q:.1%}" for q in quantiles]
+    quantiles_df.index.name = "quantile"
+
+    print(f"* Number of users: {n_users}")
+    print(f"* Mean number of ratings per user: {(user_counts.mean()):.2f}")
+    print(f"* Number of items (= movies): {n_items}")
+    print(f"* Mean number of ratings per movie: {(item_counts.mean()):.2f}")
+    print(f"* Number of interactions: {n_interact}")
+    print(f"* Density: {dens:.2f}%")
+    print(f"* Rating time span : {first_rating} - {last_rating}")
+    print(f"* Quantiles: ratings per user and per movie:\n")
+    pprint(quantiles_df)
 
     # plot results:
-
     if plot_path is not None:
         plot_path.mkdir(parents=True, exist_ok=True)
-    plot_ratings_count(rating_cumsum, plot_path= plot_path)
-    hist_user_count(user_counts, plot_path= plot_path)
-    hist_item_count(item_counts, plot_path= plot_path)
-    hist_ratings(ratings, rating_counts, plot_path= plot_path)
+    plot_cum_ratings(rating_cumsum, plot_path=plot_path)
+    hist_user_item_count(user_counts, item_counts, semilog_y=True, plot_path=plot_path)
+    hist_ratings(ratings, rating_counts, plot_path=plot_path)
 
 
 # ----------------------------------------------------------------------------------------------------------------------------

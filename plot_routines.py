@@ -2,8 +2,57 @@
 from matplotlib import pyplot as plt
 from pathlib import Path
 
-def plot_ratings_count(rating_cumsum, plot_path= None):
-    ''' Plot relative cumulative ratings over time.'''
+def hist_user_item_count(user_counts, item_counts,
+                         semilog_y=False, plot_path=None):
+    '''Plots histograms of ratings per user and per movie.'''
+    fig, axes = plt.subplots(2, 1, figsize=(9, 10))
+
+    # top : ratings per user
+    axes[0].hist(user_counts, bins=75, edgecolor="black")
+    axes[0].axvline(
+        user_counts.median(), linestyle="-", color="red",
+        label=f"Median = {user_counts.median():.1f}"
+    )
+    axes[0].axvline(
+        user_counts.mean(), linestyle="--", color="red",
+        label=f"Mean = {user_counts.mean():.1f}"
+    )
+    axes[0].set_xlabel("Number of ratings per user")
+    axes[0].set_ylabel("Number of users")
+    axes[0].set_title("Distribution of ratings per user")
+    axes[0].set_xlim(left=0)
+    axes[0].legend()
+
+    # bottom: ratings per movie
+    axes[1].hist(item_counts, bins=75, edgecolor="black")
+    axes[1].axvline(
+        item_counts.median(), linestyle="-", color="red",
+        label=f"Median = {item_counts.median():.1f}"
+    )
+    axes[1].axvline(
+        item_counts.mean(), linestyle="--", color="red",
+        label=f"Mean = {item_counts.mean():.1f}"
+    )
+    axes[1].set_xlabel("Number of ratings per movie")
+    axes[1].set_ylabel("Number of movies")
+    axes[1].set_title("Distribution of ratings per movie")
+    axes[1].set_xlim(left=0)
+    axes[1].legend()
+
+    if semilog_y:
+        for ax in axes:
+            ax.set_yscale("log")
+    for ax in axes:
+        ax.grid()
+    fig.tight_layout()
+    if plot_path is not None:
+        fig.savefig(plot_path / "hist_user_item_count.png")
+        plt.close(fig)
+    else:
+        plt.show()
+
+def plot_cum_ratings(rating_cumsum, plot_path= None):
+    ''' Plot cumulative ratings (scaled to 0-1 interval) over time.'''
     plt.figure(figsize=(11, 5))
     plt.plot(rating_cumsum.index, rating_cumsum.values,
             label="Cumulative proportion of ratings")
@@ -12,55 +61,15 @@ def plot_ratings_count(rating_cumsum, plot_path= None):
     plt.title("Cumulative ratings over time")
     plt.ylim(0, 1.05)
     plt.legend()
+    plt.grid()
     plt.tight_layout()
     if plot_path is not None:
         plt.savefig(plot_path / "ratings_cum_count.png")
     else:
         plt.show()
 
-def hist_user_count(user_counts, semilog_y= False, plot_path= None):
-    ''' Plots histogram: number of ratings per user. '''
-    plt.figure(figsize=(9, 5))
-    plt.hist(user_counts, bins=50, edgecolor="black")
-    plt.axvline(user_counts.median(), linestyle="--",
-                label=f"Median = {user_counts.median():.1f}")
-    plt.axvline(user_counts.mean(), linestyle="-.",
-                label=f"Mean = {user_counts.mean():.1f}")
-    plt.xlabel("Number of ratings per user")
-    plt.ylabel("Number of users")
-    plt.title("Distribution of ratings per user")
-    plt.legend()
-    if semilog_y:
-        plt.yscale("log")
-    plt.tight_layout()
-    if plot_path is not None:
-        plt.savefig(plot_path / "hist_user_count.png")
-    else:
-        plt.show()
-
-def hist_item_count(item_counts, semilog_y= False, plot_path= None):
-    ''' Plot histogram: number of ratings per movie. '''
-    plt.figure(figsize=(9, 5))
-
-    plt.hist(item_counts, bins=50, edgecolor="black")
-    plt.axvline(item_counts.median(), linestyle="--",
-                label=f"Median = {item_counts.median():.1f}")
-    plt.axvline(item_counts.mean(), linestyle="-.",
-                label=f"Mean = {item_counts.mean():.1f}")
-    plt.xlabel("Number of ratings per movie")
-    plt.ylabel("Number of movies")
-    plt.title("Distribution of ratings per movie")
-    plt.legend()
-    if semilog_y:
-        plt.yscale("log")
-    plt.tight_layout()
-    if plot_path is not None:
-        plt.savefig(plot_path / "hist_item_count.png")
-    else:
-        plt.show()
-
 def hist_ratings(ratings, rating_counts, plot_path= None):
-    ''' Plot histogram of rating values. '''
+    ''' Plot histogram of rating distribution. '''
 
     plt.figure(figsize=(9, 5))
     plt.bar(rating_counts.index, rating_counts.values,
@@ -69,10 +78,11 @@ def hist_ratings(ratings, rating_counts, plot_path= None):
     #            label=f"Median = {ratings['Rating'].median():.1f}")
     #plt.axvline(ratings["Rating"].mean(), linestyle="-.",
     #            label=f"Mean = {ratings['Rating'].mean():.2f}")
+
     plt.xlabel("Rating")
     plt.ylabel("Number of ratings")
     plt.title("Distribution of rating values")
-    # lt.legend()
+    # plt.legend()
     plt.tight_layout()
     if plot_path is not None:
         plt.savefig(plot_path / "hist_ratings.png")
