@@ -7,3 +7,7 @@ This file tracks the project's evolution, major updates, and methodological deci
 - Implemented data filtering based on long-tail analysis: filtered out users with fewer than 25 ratings and movies with fewer than 5 ratings.
 - Added updated dataset statistics calculation after filtering.
 - Refactored calculation logic into a dedicated reusable function (`print_dataset_statistics`).
+
+## 25.10.2026
+- Added first version of most popular method, for last month and all time.
+- report updated for data filtering.

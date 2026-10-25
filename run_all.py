@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 from pprint import pprint
 
 from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, plot_long_tail, plot_long_tail_with_threshold) 
+from most_popular import get_max_timestamp, get_min_timestamp, get_most_popular_movies, print_most_popular_movies
 
 # subfolder for plots:
 # (set to None to display plots on screen)
@@ -151,6 +152,26 @@ def main():
 
     # Calculate and display updated statistics after filtering:
     user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title=f"--- UPDATED DATASET STATISTICS (Users >= {min_ratings_per_user}, Movies >= {min_ratings_per_movie}) ---")
+
+
+    # # # # #
+    # Most popular movies
+    # # # # #
+    
+    # Get the maximum and minimum timestamps from the ratings dataset
+    max_timestamp = get_max_timestamp(ratings)
+    min_timestamp = get_min_timestamp(ratings)
+    
+    # Most popular movies (recent 1 month):
+    start_date_recent = max_timestamp - pd.DateOffset(months=1)
+
+    # Recent top popular movies
+    recent_top = get_most_popular_movies(ratings, movies, start_date=start_date_recent, end_date=max_timestamp, top_n=5)
+    print_most_popular_movies(recent_top, title="--- MOST POPULAR MOVIES (RECENT 1 MONTH) ---", start_time=start_date_recent, end_time=max_timestamp)
+
+    # All time top popular movies
+    all_time_top = get_most_popular_movies(ratings, movies, start_date=None, end_date=None, top_n=5)
+    print_most_popular_movies(all_time_top, title="--- MOST POPULAR MOVIES (ALL-TIME) ---", start_time=min_timestamp, end_time=max_timestamp)
 
 # ----------------------------------------------------------------------------------------------------------------------------
 

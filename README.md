@@ -1,7 +1,7 @@
 
 # Project work for course Recommender Systems (DATA.ML.360), Autumn 2026
 
-_Authors_ : Tatu Anttila, Arttu Kiviranta, Patrik Salmensaari
+_Authors_ : Tatu Anttila @tmhantti , Arttu Kiviranta @akiviranta , Patrik Salmensaari @pasasalm
 
 ## Repository contents
 
