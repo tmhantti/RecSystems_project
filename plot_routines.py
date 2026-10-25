@@ -148,3 +148,35 @@ def plot_long_tail_with_threshold(user_counts, item_counts, user_threshold=25, i
         plt.close(fig)
     else:
         plt.show()
+
+
+def plot_knn_validation_results(results, plot_path=None):
+    """Plot validation quality and catalogue coverage over neighborhood size."""
+    metrics = [
+        ("ndcg_at_10", "NDCG@10"),
+        ("recall_at_10", "Recall@10"),
+        ("catalogue_coverage", "Catalogue coverage"),
+    ]
+    fig, axes = plt.subplots(len(metrics), 1, figsize=(9, 12), sharex=True)
+
+    for axis, (column, label) in zip(axes, metrics):
+        for metric, group in results.groupby("metric"):
+            ordered = group.sort_values("n_neighbors")
+            axis.plot(
+                ordered["n_neighbors"],
+                ordered[column],
+                marker="o",
+                label=metric,
+            )
+        axis.set_ylabel(label)
+        axis.grid()
+        axis.legend()
+
+    axes[-1].set_xlabel("Neighborhood size (k)")
+    fig.suptitle("Item-based kNN validation results")
+    fig.tight_layout()
+    if plot_path is not None:
+        fig.savefig(Path(plot_path) / "knn_validation_results.png")
+        plt.close(fig)
+    else:
+        plt.show()
