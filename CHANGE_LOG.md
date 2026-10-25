@@ -11,3 +11,6 @@ This file tracks the project's evolution, major updates, and methodological deci
 ## 25.10.2026
 - Added first version of most popular method, for last month and all time.
 - report updated for data filtering.
+  
+## 26.10.2026
+- report updated for statistical description of the data set.
