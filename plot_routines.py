@@ -88,3 +88,63 @@ def hist_ratings(ratings, rating_counts, plot_path= None):
         plt.savefig(plot_path / "hist_ratings.png")
     else:
         plt.show()
+
+def plot_long_tail(user_counts, item_counts, plot_path=None):
+    '''Plots long tail of ratings per user and per movie.'''
+    fig, axes = plt.subplots(2, 1, figsize=(9, 10))
+
+    # top : ratings per user
+    axes[0].plot(user_counts.sort_values(ascending=False).values)
+    axes[0].set_xlabel("User rank")
+    axes[0].set_ylabel("Number of ratings")
+    axes[0].set_title("Long tail of ratings per user")
+    axes[0].set_xlim(left=0)
+    axes[0].grid()
+
+    # bottom: ratings per movie
+    axes[1].plot(item_counts.sort_values(ascending=False).values)
+    axes[1].set_xlabel("Movie rank")
+    axes[1].set_ylabel("Number of ratings")
+    axes[1].set_title("Long tail of ratings per movie")
+    axes[1].set_xlim(left=0)
+    axes[1].grid()
+
+    fig.tight_layout()
+    if plot_path is not None:
+        fig.savefig(plot_path / "long_tail_user_item_count.png")
+        plt.close(fig)
+    else:
+        plt.show()
+
+
+def plot_long_tail_with_threshold(user_counts, item_counts, user_threshold=25, item_threshold=5, plot_path=None):
+    '''Plots long tail of ratings per user and per movie with thresholds.
+    Thresholds are drawn as horizontal lines, to show which users and movies would be filtered out.'''
+    fig, axes = plt.subplots(2, 1, figsize=(9, 10))
+
+    # top : ratings per user
+    axes[0].plot(user_counts.sort_values(ascending=False).values)
+    axes[0].axhline(user_threshold, color='red', linestyle='--', label=f'Threshold = {user_threshold}')
+    axes[0].set_xlabel("User rank")
+    axes[0].set_ylabel("Number of ratings")
+    axes[0].set_title("Long tail of ratings per user with threshold")
+    axes[0].set_xlim(left=0)
+    axes[0].grid()
+    axes[0].legend()
+
+    # bottom: ratings per movie
+    axes[1].plot(item_counts.sort_values(ascending=False).values)
+    axes[1].axhline(item_threshold, color='red', linestyle='--', label=f'Threshold = {item_threshold}')
+    axes[1].set_xlabel("Movie rank")
+    axes[1].set_ylabel("Number of ratings")
+    axes[1].set_title("Long tail of ratings per movie with threshold")
+    axes[1].set_xlim(left=0)
+    axes[1].grid()
+    axes[1].legend()
+
+    fig.tight_layout()
+    if plot_path is not None:
+        fig.savefig(plot_path / "long_tail_user_item_count_with_threshold.png")
+        plt.close(fig)
+    else:
+        plt.show()

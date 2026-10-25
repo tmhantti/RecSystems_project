@@ -8,11 +8,57 @@ import numpy as np
 from matplotlib import pyplot as plt
 from pprint import pprint
 
-from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count) 
+from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, plot_long_tail, plot_long_tail_with_threshold) 
 
 # subfolder for plots:
 # (set to None to display plots on screen)
 plot_path = Path.cwd() / "plots" 
+
+def print_dataset_statistics(ratings, title=None):
+    """Calculate and display dataset statistics, distribution details, and quantiles."""
+    rat_mat = ratings.pivot(index="UserID", columns="MovieID", values="Rating")
+    rat_mat = rat_mat.to_numpy()
+
+    n = rat_mat.size
+    n_users = rat_mat.shape[0]
+    n_items = rat_mat.shape[1]
+    
+    # Number of interactions (= number of non-empty elements in the matrix)
+    n_interact = n - np.count_nonzero(np.isnan(rat_mat))
+    # Density (= fraction of non-empty elements in the matrix)
+    dens = 100 * n_interact / n 
+    
+    # Dates for the first and last ratings given:
+    first_rating = ratings['Timestamp'].min()
+    last_rating = ratings['Timestamp'].max()
+    
+    user_counts = ratings['UserID'].value_counts()    
+    item_counts = ratings['MovieID'].value_counts()   
+    
+    quantiles = [0.05, 0.1, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
+    quantiles_df = pd.DataFrame({
+        "Users": user_counts.quantile(quantiles),
+        "Movies": item_counts.quantile(quantiles)
+    })
+    quantiles_df.index = [f"{q:.1%}" for q in quantiles]
+    quantiles_df.index.name = "quantile"
+
+    if title:
+        print(f"\n{title}")
+    print(f"* Number of users: {n_users}")
+    print(f"* Mean number of ratings per user: {(user_counts.mean()):.2f}")
+    print(f"* Number of items (= movies): {n_items}")
+    print(f"* Mean number of ratings per movie: {(item_counts.mean()):.2f}")
+    print(f"* Number of interactions: {n_interact}")
+    print(f"* Density: {dens:.2f}%")
+    print(f"* Rating time span : {first_rating} - {last_rating}")
+    print(f"* Quantiles: ratings per user and per movie:\n")
+    pprint(quantiles_df)
+    
+    return user_counts, item_counts, rating_counts_func(ratings)
+
+def rating_counts_func(ratings):
+    return ratings['Rating'].value_counts().sort_index()
 
 def main():
     # set up argument parser:
@@ -51,52 +97,12 @@ def main():
     # (timestamp : when rating was submitted, in seconds since 1970-01-01 00:00 UTC) 
     ratings["Timestamp"] = pd.to_datetime(ratings['Timestamp'], unit='s')
 
-    # create rating matrix 
-    # (rows - users, columns - movies, values - ratings)
-    rat_mat = ratings.pivot(index="UserID", columns="MovieID", values="Rating")
-    rat_mat = rat_mat.to_numpy()
-
-    # calculate and display some statistics:
-    n = rat_mat.size
-    n_users = rat_mat.shape[0]
-    n_items = rat_mat.shape[1]
-    # number of interactions:
-    # (= number of non-empty elements in the matrix)
-    n_interact = n - np.count_nonzero(np.isnan(rat_mat))
-    # density: 
-    # (= fraction of non-empty elements in the matrix)
-    dens = 100*n_interact / n 
-    # dates for the first and last ratings given:
-    first_rating = ratings['Timestamp'].min()
-    last_rating = ratings['Timestamp'].max()
-    # distribution of number of rankings / user
-    user_counts = ratings['UserID'].value_counts()    
-    # distribution of number of rankings / item
-    item_counts = ratings['MovieID'].value_counts()   
-    # rating distribution
-    rating_counts = ratings['Rating'].value_counts().sort_index()  
-    # cumulative sum of number of ratings given over time 
-    # (scaled to 0-1 interval):
+    # Calculate and display initial statistics:
+    user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title="--- INITIAL DATASET STATISTICS ---")
+    
+    # Cumulative sum of number of ratings given over time (scaled to 0-1 interval):
     timestamp_counts = ratings["Timestamp"].value_counts().sort_index()
     rating_cumsum = timestamp_counts.cumsum() / ratings["Timestamp"].count()
-    # quantiles:
-    quantiles = [0.05, 0.1, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
-    quantiles_df = pd.DataFrame({
-        "Users": user_counts.quantile(quantiles),
-        "Movies": item_counts.quantile(quantiles)
-    })
-    quantiles_df.index = [f"{q:.1%}" for q in quantiles]
-    quantiles_df.index.name = "quantile"
-
-    print(f"* Number of users: {n_users}")
-    print(f"* Mean number of ratings per user: {(user_counts.mean()):.2f}")
-    print(f"* Number of items (= movies): {n_items}")
-    print(f"* Mean number of ratings per movie: {(item_counts.mean()):.2f}")
-    print(f"* Number of interactions: {n_interact}")
-    print(f"* Density: {dens:.2f}%")
-    print(f"* Rating time span : {first_rating} - {last_rating}")
-    print(f"* Quantiles: ratings per user and per movie:\n")
-    pprint(quantiles_df)
 
     # plot results:
     if plot_path is not None:
@@ -104,7 +110,47 @@ def main():
     plot_cum_ratings(rating_cumsum, plot_path=plot_path)
     hist_user_item_count(user_counts, item_counts, semilog_y=True, plot_path=plot_path)
     hist_ratings(ratings, rating_counts, plot_path=plot_path)
+    plot_long_tail(user_counts, item_counts, plot_path=plot_path)
+    plot_long_tail_with_threshold(user_counts, item_counts, user_threshold=25, item_threshold=5, plot_path=plot_path)
 
+   
+    # # # # #
+    # For other contributors
+    # If you see that different kind of filtering is needed, feel free to change the thresholds and/or the filtering logic below.
+    # # # # #
+
+
+    # Filter out users with less than 25 ratings and movies with less than 5 ratings based on long tail analysis:
+    min_ratings_per_user = 25
+    min_ratings_per_movie = 5
+    
+    rows_before_filter = len(ratings)
+    users_before_filter = ratings['UserID'].nunique()
+    movies_before_filter = ratings['MovieID'].nunique()
+
+    # Iterative filtering to ensure clean removal of both user and item constraints
+    while True:
+        u_counts = ratings['UserID'].value_counts()
+        i_counts = ratings['MovieID'].value_counts()
+        
+        valid_users = u_counts[u_counts >= min_ratings_per_user].index
+        valid_movies = i_counts[i_counts >= min_ratings_per_movie].index
+        
+        filtered_ratings = ratings[ratings['UserID'].isin(valid_users) & ratings['MovieID'].isin(valid_movies)]
+        
+        if len(filtered_ratings) == len(ratings):
+            break
+        ratings = filtered_ratings
+
+    users_removed = users_before_filter - ratings['UserID'].nunique()
+    movies_removed = movies_before_filter - ratings['MovieID'].nunique()
+    rows_removed = rows_before_filter - len(ratings)
+
+    print(f"\n* Filtering applied: Removed {users_removed} users (< {min_ratings_per_user} ratings) and {movies_removed} movies (< {min_ratings_per_movie} ratings).")
+    print(f"* Removed rows (interactions): {rows_removed}")
+
+    # Calculate and display updated statistics after filtering:
+    user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title=f"--- UPDATED DATASET STATISTICS (Users >= {min_ratings_per_user}, Movies >= {min_ratings_per_movie}) ---")
 
 # ----------------------------------------------------------------------------------------------------------------------------
 
