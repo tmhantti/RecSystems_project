@@ -1,13 +1,10 @@
-import os
-import sys
-import re
 import argparse
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
 from pprint import pprint
 
+from data_loader import filter_ratings, load_movielens, temporal_split
 from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, plot_long_tail, plot_long_tail_with_threshold) 
 from most_popular import get_max_timestamp, get_min_timestamp, get_most_popular_movies, print_most_popular_movies
 
@@ -64,39 +61,11 @@ def rating_counts_func(ratings):
 def main():
     # set up argument parser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--data_dir", 
-                        type= Path, 
+    parser.add_argument("-d", "--data_dir", type=Path, required=True,
                         help="subfolder containing input data files")
     args = parser.parse_args()
     
-    # read input data sets and set column names:
-    rel_path = args.data_dir
-    if rel_path.exists():
-        users = pd.read_csv(rel_path / "users.dat", sep='::', header=None, engine='python')
-        ratings = pd.read_csv(rel_path / "ratings.dat", sep='::', header=None, engine='python')
-        movies = pd.read_csv(rel_path / "movies.dat", sep='::', header=None, engine='python', encoding='latin1')
-    else: 
-        raise FileNotFoundError(f"Subfolder '{rel_path}' was not found.") 
-    users.columns = ['UserID', 'Gender', 'Age', 'Occupation', 'Zip-code']
-    ratings.columns = ['UserID', 'MovieID', 'Rating', 'Timestamp']
-    movies.columns = ['MovieID', 'Title', 'Genres']
-    
-    # add movie names and publishing year as separate columns, 
-    # convert genres column to list:
-    rp = r'(.*) ?\(([0-9][0-9][0-9][0-9])\)' # use regex for splitting 
-    movies[['MovieName', 'MovieYear']] = movies['Title'].str.extract(rp)
-    movies['MovieYear'] = movies['MovieYear'].astype("Int64")
-    movies['MovieName'] = movies['MovieName'].str.strip()
-    movies['Genres'] = movies['Genres'].str.split("|")
-    # check for NaN values:
-    nan_rows = movies[movies.isna().any(axis=1)]
-    if len(nan_rows) > 0:
-        print("* Warning: the following rows in movies df contain NaN values:")
-        print(nan_rows)
-    
-    # convert timestamp column to datetime
-    # (timestamp : when rating was submitted, in seconds since 1970-01-01 00:00 UTC) 
-    ratings["Timestamp"] = pd.to_datetime(ratings['Timestamp'], unit='s')
+    _users, ratings, movies = load_movielens(args.data_dir)
 
     # Calculate and display initial statistics:
     user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title="--- INITIAL DATASET STATISTICS ---")
@@ -121,38 +90,19 @@ def main():
     # # # # #
 
 
-    # Filter out users with less than 25 ratings and movies with less than 5 ratings based on long tail analysis:
     min_ratings_per_user = 25
     min_ratings_per_movie = 5
-    
-    rows_before_filter = len(ratings)
-    users_before_filter = ratings['UserID'].nunique()
-    movies_before_filter = ratings['MovieID'].nunique()
+    ratings, filter_stats = filter_ratings(
+        ratings,
+        min_ratings_per_user=min_ratings_per_user,
+        min_ratings_per_movie=min_ratings_per_movie,
+    )
 
-    # Iterative filtering to ensure clean removal of both user and item constraints
-    while True:
-        u_counts = ratings['UserID'].value_counts()
-        i_counts = ratings['MovieID'].value_counts()
-        
-        valid_users = u_counts[u_counts >= min_ratings_per_user].index
-        valid_movies = i_counts[i_counts >= min_ratings_per_movie].index
-        
-        filtered_ratings = ratings[ratings['UserID'].isin(valid_users) & ratings['MovieID'].isin(valid_movies)]
-        
-        if len(filtered_ratings) == len(ratings):
-            break
-        ratings = filtered_ratings
-
-    users_removed = users_before_filter - ratings['UserID'].nunique()
-    movies_removed = movies_before_filter - ratings['MovieID'].nunique()
-    rows_removed = rows_before_filter - len(ratings)
-
-    print(f"\n* Filtering applied: Removed {users_removed} users (< {min_ratings_per_user} ratings) and {movies_removed} movies (< {min_ratings_per_movie} ratings).")
-    print(f"* Removed rows (interactions): {rows_removed}")
+    print(f"\n* Filtering applied: Removed {filter_stats['users_removed']} users (< {min_ratings_per_user} ratings) and {filter_stats['movies_removed']} movies (< {min_ratings_per_movie} ratings).")
+    print(f"* Removed rows (interactions): {filter_stats['rows_removed']}")
 
     # Calculate and display updated statistics after filtering:
     user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title=f"--- UPDATED DATASET STATISTICS (Users >= {min_ratings_per_user}, Movies >= {min_ratings_per_movie}) ---")
-
 
     # # # # #
     # Most popular movies
@@ -173,34 +123,11 @@ def main():
     all_time_top = get_most_popular_movies(ratings, movies, start_date=None, end_date=None, top_n=5)
     print_most_popular_movies(all_time_top, title="--- MOST POPULAR MOVIES (ALL-TIME) ---", start_time=min_timestamp, end_time=max_timestamp)
 
-# ----------------------------------------------------------------------------------------------------------------------------
-
-    # TODO (part 1, DL 8.11):
-    '''
-    - The data loaded and characterized: 
-        * users, items, interactions, density; 
-        * distribution of interactions per user and per item, with a plot: 
-          this is the long tail from Lecture 5.1, slide 5; 
-        * the rating distribution; the time span and how activity is distributed across it.
-    
-    - A temporal split into train/validation/test (Lecture 3.1, slide 4). Document exactly where you
-    cut and why. If you filter out low-activity users or items, state the threshold and how many rows
-    it removed.
-
-    - Two baselines:
-        1. Item-based kNN (Lecture 1.2, slides 5–10). Tune the neighborhood size k and the
-        similarity measure.
-        2. Most popular. There is nothing to tune here, but there are choices: all-time popularity or
-        a recent window; count all ratings or only positive ones. State which choices you made,
-        and report at least two variants.
-
-    - Metrics: Precision@10, Recall@10, NDCG@10 (Lecture 3.1, slides 7–8), plus catalogue
-    coverage (Lecture 3.1, slide 9). Ranked against the full catalogue.
-    
-    - Include in the report a justification for each protocol decision: the split, the feedback
-    treatment, the filtering, the candidate set, and the choice of k. One or two sentences each are
-    sufficient, referring to the relevant lecture material
-    '''
+    split = temporal_split(ratings)
+    print(
+        f"\n* Temporal split: {len(split.train)} train, "
+        f"{len(split.validation)} validation, {len(split.test)} test ratings."
+    )
 
 if __name__ == "__main__":
-    main()
+    main()
