@@ -74,9 +74,9 @@ def hist_ratings(ratings, rating_counts, plot_path= None):
     plt.figure(figsize=(9, 5))
     plt.bar(rating_counts.index, rating_counts.values,
             width=0.7, edgecolor="black")
-    plt.axvline(ratings["Rating"].median(), linestyle="--",
+    plt.axvline(ratings["Rating"].median(), linestyle="--", color="red",
                 label=f"Median = {ratings['Rating'].median():.1f}")
-    plt.axvline(ratings["Rating"].mean(), linestyle="-.",
+    plt.axvline(ratings["Rating"].mean(), linestyle="-.", color="red",
                 label=f"Mean = {ratings['Rating'].mean():.2f}")
 
     plt.xlabel("Rating")
