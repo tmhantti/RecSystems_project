@@ -7,6 +7,7 @@ from pprint import pprint
 from data_loader import filter_ratings, load_movielens, temporal_split
 from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, plot_long_tail, plot_long_tail_with_threshold) 
 from most_popular import get_max_timestamp, get_min_timestamp, get_most_popular_movies, print_most_popular_movies
+from knn_recommender import run_knn_experiment
 
 # subfolder for plots:
 # (set to None to display plots on screen)
@@ -67,6 +68,7 @@ def main():
     
     _users, ratings, movies = load_movielens(args.data_dir)
 
+    print("*** Calculating descriptive statistics (Part I) ***\n")
     # Calculate and display initial statistics:
     user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title="--- INITIAL DATASET STATISTICS ---")
     
@@ -89,7 +91,7 @@ def main():
     # If you see that different kind of filtering is needed, feel free to change the thresholds and/or the filtering logic below.
     # # # # #
 
-
+    print("\n***Getting most popular items (Part I) ***\n")
     min_ratings_per_user = 25
     min_ratings_per_movie = 5
     ratings, filter_stats = filter_ratings(
@@ -98,7 +100,7 @@ def main():
         min_ratings_per_movie=min_ratings_per_movie,
     )
 
-    print(f"\n* Filtering applied: Removed {filter_stats['users_removed']} users (< {min_ratings_per_user} ratings) and {filter_stats['movies_removed']} movies (< {min_ratings_per_movie} ratings).")
+    print(f"* Filtering applied: Removed {filter_stats['users_removed']} users (< {min_ratings_per_user} ratings) and {filter_stats['movies_removed']} movies (< {min_ratings_per_movie} ratings).")
     print(f"* Removed rows (interactions): {filter_stats['rows_removed']}")
 
     # Calculate and display updated statistics after filtering:
@@ -129,5 +131,10 @@ def main():
         f"{len(split.validation)} validation, {len(split.test)} test ratings."
     )
 
+    # Run kNN - recommender:
+    print("\n*** Running kNN-recommender (Part I) ***\n")
+
+    run_knn_experiment(args.data_dir)
+
 if __name__ == "__main__":
-    main()
+    main()
