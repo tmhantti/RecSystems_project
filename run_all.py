@@ -85,5 +85,9 @@ def main():
     print("\n*** Running kNN-recommender (Part I) ***\n")
     run_knn_experiment(args.data_dir)
 
+    # NOTE: comment following routine call out if you don't want to wait for up to 20 mins. 
+    print("\n*** Running latent factor CF model (Part II) ***\n")
+    run_lf_sgd(split)
+
 if __name__ == "__main__":
     main()
