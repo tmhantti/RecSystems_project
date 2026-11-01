@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
 import numpy as np
+import copy
 
 import pandas as pd
 
@@ -53,13 +54,12 @@ def load_movielens(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataF
     movies["MovieYear"] = movies["MovieYear"].astype("Int64")
     movies["MovieName"] = movies["MovieName"].str.strip()
     movies["Genres"] = movies["Genres"].str.split("|")
-
     nan_rows = movies[movies.isna().any(axis=1)]
     if not nan_rows.empty:
         print("* Warning: the following rows in movies df contain NaN values:")
         print(nan_rows)
-
     ratings["Timestamp"] = pd.to_datetime(ratings["Timestamp"], unit="s")
+
     return users, ratings, movies
 
 def print_dataset_statistics(ratings, title=None):
@@ -83,7 +83,6 @@ def print_dataset_statistics(ratings, title=None):
     user_counts = ratings['UserID'].value_counts()    
     item_counts = ratings['MovieID'].value_counts()   
     ratings_count = ratings['Rating'].value_counts().sort_index()
-    
     
     quantiles = [0.05, 0.1, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
     quantiles_df = pd.DataFrame({
@@ -164,3 +163,69 @@ def temporal_split(
         validation=validation.sort_index(),
         test=test.sort_index(),
     )
+
+def split_by_user_activity(ds, ratings, cutoff = None, use_all_data = False):
+    ''' Splits TemporalSplit dataset (ds) into two based on user activity.
+        Input cutoff is the number of ratings/user used as criterion in splitting.
+        Default cutoff value is the median value of ratings/user count.
+        If use_all_data is True, split is done using the whole data set,
+        otherwise training data set is used.   
+
+        NOTE: The split is only applied to test and validation sets.
+    '''
+    if use_all_data:
+        user_counts = ratings['UserID'].value_counts()
+    else:
+        user_counts = ds.train['UserID'].value_counts()  
+    if cutoff is None:
+        cutoff = user_counts.quantile(0.5)
+
+    low_act_users = list(user_counts[user_counts < cutoff].index)
+    high_act_users = list(user_counts[user_counts >= cutoff].index)
+
+    ds_low = TemporalSplit(
+        train=ds.train, 
+        test=ds.test[ds.test['UserID'].isin(low_act_users)],
+        validation= ds.validation[ds.validation['UserID'].isin(low_act_users)]
+        )
+    ds_high = TemporalSplit(
+        train=ds.train, 
+        test=ds.test[ds.test['UserID'].isin(high_act_users)],
+        validation= ds.validation[ds.validation['UserID'].isin(low_act_users)]
+        )
+
+    return ds_low, ds_high
+
+def split_by_popularity(ds, ratings, cutoff = 1000, use_all_data = True):
+    ''' Splits TemporalSplit dataset (ds) into two based on the movie popularity: 
+        highly popular items versus long-tail items.
+        Input cutoff is the number of ratings/movie used as criterion in splitting.
+        Default cutoff value is based on visual investigation of ratings/movie histogram 
+        (see hist_user_item_count.png in plots folder).  
+        If use_all_data is True, split is done using the whole data set,
+        otherwise training data set is used.   
+
+        NOTE: The split is only applied to test and validation sets.
+        NOTE: Popularity is here taken to mean popularity in terms of ratings received 
+              (both negative and positive)
+    '''
+    if use_all_data:
+        item_counts = ratings['MovieID'].value_counts()
+    else:
+        item_counts = ds.train['MovieID'].value_counts()  
+
+    popular_items = list(item_counts[item_counts >= cutoff].index)
+    tail_items = list(item_counts[item_counts < cutoff].index)
+
+    ds_pop= TemporalSplit(
+        train=ds.train, 
+        test=ds.test[ds.test['MovieID'].isin(popular_items)],
+        validation= ds.validation[ds.validation['UserID'].isin(popular_items)]
+        )
+    ds_tail = TemporalSplit(
+        train=ds.train, 
+        test=ds.test[ds.test['MovieID'].isin(tail_items)],
+        validation= ds.validation[ds.validation['UserID'].isin(tail_items)]
+        )
+
+    return ds_pop, ds_tail

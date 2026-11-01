@@ -6,16 +6,17 @@ from pprint import pprint
 import sys
 import datetime as dt
 
-from utils import filter_ratings, load_movielens, temporal_split
-from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, plot_long_tail, plot_long_tail_with_threshold) 
-from most_popular import get_max_timestamp, get_min_timestamp, get_most_popular_movies, print_most_popular_movies
+from utils import filter_ratings, load_movielens, temporal_split, print_dataset_statistics
+# from utils import split_by_user_activity, split_by_popularity
+from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, 
+                           plot_long_tail, plot_long_tail_with_threshold) 
+from most_popular import (get_max_timestamp, get_min_timestamp, get_most_popular_movies, 
+                          print_most_popular_movies)
 from knn_recommender import run_knn_experiment
 
 # subfolder for plots:
 # (set to None to display plots on screen)
 plot_path = Path.cwd() / "plots" 
-
-
 
 def main():
     # set up argument parser:

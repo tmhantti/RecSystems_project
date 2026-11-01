@@ -9,7 +9,7 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
 
-from data_loader import filter_ratings, load_movielens, temporal_split
+from utils import filter_ratings, load_movielens, temporal_split
 from plot_routines import plot_knn_validation_results
 
 
