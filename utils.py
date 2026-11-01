@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
+from collections.abc import Iterable
 import numpy as np
 import copy
 from scipy import stats
@@ -219,7 +220,7 @@ def split_by_user_activity(ds, ratings, cutoff = None, use_all_data = False):
     ds_high = TemporalSplit(
         train=ds.train, 
         test=ds.test[ds.test['UserID'].isin(high_act_users)],
-        validation= ds.validation[ds.validation['UserID'].isin(low_act_users)]
+        validation= ds.validation[ds.validation['UserID'].isin(high_act_users)]
         )
 
     return ds_low, ds_high
@@ -268,4 +269,57 @@ def subsample(ds, x, random_state = None):
     )
 
     return ds_sparse
-    
+
+def evaluate_at_k(
+    recommendations: dict[int, list[int]],
+    held_out: pd.DataFrame,
+    catalogue: Iterable[int],
+    k: int = 10,
+    positive_threshold: float = 4.0,
+) -> dict[str, float]:
+    """Evaluate ranked recommendations against positive held-out ratings universally for all models."""
+    if k < 1:
+        raise ValueError("k must be positive.")
+
+    relevant = (
+        held_out[held_out["Rating"] >= positive_threshold]
+        .groupby("UserID")["MovieID"]
+        .agg(set)
+    )
+    precisions: list[float] = []
+    recalls: list[float] = []
+    ndcgs: list[float] = []
+    recommended_items: set[int] = set()
+
+    for user_id, relevant_items in relevant.items():
+        ranked = recommendations.get(user_id, [])[:k]
+        recommended_items.update(ranked)
+        hits = [item for item in ranked if item in relevant_items]
+        precisions.append(len(hits) / k)
+        recalls.append(len(hits) / len(relevant_items))
+
+        dcg = sum(
+            1.0 / np.log2(rank + 2)
+            for rank, item in enumerate(ranked)
+            if item in relevant_items
+        )
+        ideal_hits = min(len(relevant_items), k)
+        idcg = sum(1.0 / np.log2(rank + 2) for rank in range(ideal_hits))
+        ndcgs.append(dcg / idcg if idcg else 0.0)
+
+    catalogue_size = len(set(catalogue))
+    return {
+        "precision_at_10": float(np.mean(precisions)) if precisions else 0.0,
+        "recall_at_10": float(np.mean(recalls)) if recalls else 0.0,
+        "ndcg_at_10": float(np.mean(ndcgs)) if ndcgs else 0.0,
+        "catalogue_coverage": (
+            len(recommended_items) / catalogue_size if catalogue_size else 0.0
+        ),
+    }
+
+def print_evaluation_scores(scores: dict, title: str = None):
+    """Prints evaluation metrics dictionary in a clean, readable format without dict syntax."""
+    if title:
+        print(f"\n{title}")
+    for key, value in scores.items():
+        print(f"- {key}: {value}")

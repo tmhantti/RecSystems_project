@@ -9,7 +9,7 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
 
-from utils import filter_ratings, load_movielens, temporal_split
+from utils import filter_ratings, load_movielens, print_evaluation_scores, print_evaluation_scores, temporal_split, evaluate_at_k
 from plot_routines import plot_knn_validation_results
 
 
@@ -217,15 +217,28 @@ def run_knn_experiment(
             )
 
     results_df = pd.DataFrame(results).sort_values(
-        "ndcg_at_10", ascending=False
-    )
+            "ndcg_at_10", ascending=False
+        )
     if plot_path is not None:
         plot_path.mkdir(parents=True, exist_ok=True)
         plot_knn_validation_results(results_df, plot_path=plot_path)
+        
     print("\nValidation results:")
     print(results_df.to_string(index=False))
-    print("\nBest configuration:")
-    print(results_df.iloc[0].to_string())
+    
+    best_row = results_df.iloc[0].to_dict()
+    best_scores = {
+        "precision_at_10": best_row["precision_at_10"],
+        "recall_at_10": best_row["recall_at_10"],
+        "ndcg_at_10": best_row["ndcg_at_10"],
+        "catalogue_coverage": best_row["catalogue_coverage"]
+    }
+    
+    print_evaluation_scores(
+        best_scores, 
+        title=f"--- BEST KNN VALIDATION SCORES (Metric: {best_row['metric']}, k={int(best_row['n_neighbors'])}) ---"
+    )
+    
     return results_df
 
 

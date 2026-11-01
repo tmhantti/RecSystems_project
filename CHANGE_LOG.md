@@ -14,3 +14,6 @@ This file tracks the project's evolution, major updates, and methodological deci
   
 ## 26.10.2026
 - report updated for statistical description of the data set.
+
+## 1.11.2026
+- both reports updated for most popular results, code updates
