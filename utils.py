@@ -5,12 +5,15 @@ from pathlib import Path
 from pprint import pprint
 import numpy as np
 import copy
+from scipy import stats
 
 import pandas as pd
 
 RATING_COLUMNS = ["UserID", "MovieID", "Rating", "Timestamp"]
 USER_COLUMNS = ["UserID", "Gender", "Age", "Occupation", "Zip-code"]
 MOVIE_COLUMNS = ["MovieID", "Title", "Genres"]
+# random states used to calculate variability of modeling results:
+RAND_STATES = list(range(0, 10))
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,31 @@ def print_dataset_statistics(ratings, title=None):
     pprint(quantiles_df)
     
     return user_counts, item_counts, ratings_count
+
+def calc_metrics_stats(df, metrics, confidence=0.95):
+    """Calculate mean and confidence interval across RNG seeds for different metrics."""
+
+    summary = []
+    for metric in metrics:
+        values = df[metric].dropna()
+        n = len(values)
+        mean = values.mean()
+        # standard error of mean:
+        sem = stats.sem(values) 
+        # Student's t confidence interval:
+        ci_low, ci_high = stats.t.interval(
+            confidence,
+            df=n - 1,
+            loc=mean,
+            scale=sem
+        )
+        # store results:
+        summary.append({
+            "metric": metric,
+            "mean": mean,
+            "conf_int": [ci_low, ci_high],
+        })
+    return summary, pd.DataFrame(summary)
 
 def filter_ratings(
     ratings: pd.DataFrame,
@@ -240,3 +268,4 @@ def subsample(ds, x, random_state = None):
     )
 
     return ds_sparse
+    

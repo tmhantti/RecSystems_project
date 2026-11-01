@@ -13,6 +13,7 @@ from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count,
 from most_popular import (get_max_timestamp, get_min_timestamp, get_most_popular_movies, 
                           print_most_popular_movies)
 from knn_recommender import run_knn_experiment
+from lf_sgd import run_lf_sgd
 
 # subfolder for plots:
 # (set to None to display plots on screen)
@@ -30,7 +31,6 @@ def main():
     
     _users, ratings, movies = load_movielens(args.data_dir)
 
-    print("*** Calculating descriptive statistics (Part I) ***\n")
     # Calculate and display initial statistics:
     user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title="--- INITIAL DATASET STATISTICS ---")
     
@@ -52,8 +52,6 @@ def main():
     # For other contributors
     # If you see that different kind of filtering is needed, feel free to change the thresholds and/or the filtering logic below.
     # # # # #
-
-    print("\n***Getting most popular items (Part I) ***\n")
     min_ratings_per_user = 25
     min_ratings_per_movie = 5
     ratings, filter_stats = filter_ratings(
@@ -75,10 +73,12 @@ def main():
     # Get the maximum and minimum timestamps from the ratings dataset
     max_timestamp = get_max_timestamp(ratings)
     min_timestamp = get_min_timestamp(ratings)
+
+    print("\n***Getting most popular items (Part I) ***\n")
     
     # Most popular movies (recent 1 month):
     start_date_recent = max_timestamp - pd.DateOffset(months=1)
-
+    
     # Recent top popular movies
     recent_top = get_most_popular_movies(ratings, movies, start_date=start_date_recent, end_date=max_timestamp, top_n=5)
     print_most_popular_movies(recent_top, title="--- MOST POPULAR MOVIES (RECENT 1 MONTH) ---", start_time=start_date_recent, end_time=max_timestamp)
@@ -92,6 +92,10 @@ def main():
         f"\n* Temporal split: {len(split.train)} train, "
         f"{len(split.validation)} validation, {len(split.test)} test ratings."
     )
+
+    run_lf_sgd(split)
+
+    sys.exit()
 
     # Run kNN - recommender:
     print("\n*** Running kNN-recommender (Part I) ***\n")
