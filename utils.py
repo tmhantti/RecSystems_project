@@ -229,3 +229,14 @@ def split_by_popularity(ds, ratings, cutoff = 1000, use_all_data = True):
         )
 
     return ds_pop, ds_tail
+
+def subsample(ds, x, random_state = None):
+    ''' Remove fraction x of rows from training data in TemporalSplit object. '''
+
+    ds_sparse = TemporalSplit(
+        train=ds.train.sample(frac=1-x, random_state=random_state).sort_index(),
+        test=ds.test.copy(),
+        validation= ds.validation.copy()
+    )
+
+    return ds_sparse
