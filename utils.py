@@ -1,10 +1,11 @@
-"""Data loading, filtering, and temporal splitting for MovieLens ratings."""
+"""Misc. utility routines : statistics, data loading, filtering, and temporal splitting for MovieLens ratings."""
 
 from dataclasses import dataclass
 from pathlib import Path
+from pprint import pprint
+import numpy as np
 
 import pandas as pd
-
 
 RATING_COLUMNS = ["UserID", "MovieID", "Rating", "Timestamp"]
 USER_COLUMNS = ["UserID", "Gender", "Age", "Occupation", "Zip-code"]
@@ -27,8 +28,14 @@ def load_movielens(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataF
     if not data_dir.is_dir():
         raise NotADirectoryError(f"Data path '{data_dir}' is not a directory.")
 
-    users = pd.read_csv(data_dir / "users.dat", sep="::", header=None, engine="python")
-    ratings = pd.read_csv(data_dir / "ratings.dat", sep="::", header=None, engine="python")
+    users = pd.read_csv(data_dir / "users.dat", 
+        sep="::", 
+        header=None, 
+        engine="python")
+    ratings = pd.read_csv(data_dir / "ratings.dat", 
+        sep="::", 
+        header=None, 
+        engine="python")
     movies = pd.read_csv(
         data_dir / "movies.dat",
         sep="::",
@@ -55,6 +62,50 @@ def load_movielens(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataF
     ratings["Timestamp"] = pd.to_datetime(ratings["Timestamp"], unit="s")
     return users, ratings, movies
 
+def print_dataset_statistics(ratings, title=None):
+    """Calculate and display dataset statistics, distribution details, and quantiles."""
+    rat_mat = ratings.pivot(index="UserID", columns="MovieID", values="Rating")
+    rat_mat = rat_mat.to_numpy()
+
+    n = rat_mat.size
+    n_users = rat_mat.shape[0]
+    n_items = rat_mat.shape[1]
+    
+    # Number of interactions (= number of non-empty elements in the matrix)
+    n_interact = n - np.count_nonzero(np.isnan(rat_mat))
+    # Density (= fraction of non-empty elements in the matrix)
+    dens = 100 * n_interact / n 
+    
+    # Dates for the first and last ratings given:
+    first_rating = ratings['Timestamp'].min()
+    last_rating = ratings['Timestamp'].max()
+    
+    user_counts = ratings['UserID'].value_counts()    
+    item_counts = ratings['MovieID'].value_counts()   
+    ratings_count = ratings['Rating'].value_counts().sort_index()
+    
+    
+    quantiles = [0.05, 0.1, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
+    quantiles_df = pd.DataFrame({
+        "Users": user_counts.quantile(quantiles),
+        "Movies": item_counts.quantile(quantiles),
+    })
+    quantiles_df.index = [f"{q:.1%}" for q in quantiles]
+    quantiles_df.index.name = "quantile"
+
+    if title:
+        print(f"\n{title}")
+    print(f"* Number of users: {n_users}")
+    print(f"* Mean number of ratings per user: {(user_counts.mean()):.2f}")
+    print(f"* Number of items (= movies): {n_items}")
+    print(f"* Mean number of ratings per movie: {(item_counts.mean()):.2f}")
+    print(f"* Number of interactions: {n_interact}")
+    print(f"* Density: {dens:.2f}%")
+    print(f"* Rating time span : {first_rating} - {last_rating}")
+    print(f"* Quantiles: ratings per user and per movie:\n")
+    pprint(quantiles_df)
+    
+    return user_counts, item_counts, ratings_count
 
 def filter_ratings(
     ratings: pd.DataFrame,

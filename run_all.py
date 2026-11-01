@@ -3,8 +3,10 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from pprint import pprint
+import sys
+import datetime as dt
 
-from data_loader import filter_ratings, load_movielens, temporal_split
+from utils import filter_ratings, load_movielens, temporal_split
 from plot_routines import (hist_ratings, plot_cum_ratings, hist_user_item_count, plot_long_tail, plot_long_tail_with_threshold) 
 from most_popular import get_max_timestamp, get_min_timestamp, get_most_popular_movies, print_most_popular_movies
 from knn_recommender import run_knn_experiment
@@ -13,51 +15,7 @@ from knn_recommender import run_knn_experiment
 # (set to None to display plots on screen)
 plot_path = Path.cwd() / "plots" 
 
-def print_dataset_statistics(ratings, title=None):
-    """Calculate and display dataset statistics, distribution details, and quantiles."""
-    rat_mat = ratings.pivot(index="UserID", columns="MovieID", values="Rating")
-    rat_mat = rat_mat.to_numpy()
 
-    n = rat_mat.size
-    n_users = rat_mat.shape[0]
-    n_items = rat_mat.shape[1]
-    
-    # Number of interactions (= number of non-empty elements in the matrix)
-    n_interact = n - np.count_nonzero(np.isnan(rat_mat))
-    # Density (= fraction of non-empty elements in the matrix)
-    dens = 100 * n_interact / n 
-    
-    # Dates for the first and last ratings given:
-    first_rating = ratings['Timestamp'].min()
-    last_rating = ratings['Timestamp'].max()
-    
-    user_counts = ratings['UserID'].value_counts()    
-    item_counts = ratings['MovieID'].value_counts()   
-    
-    quantiles = [0.05, 0.1, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
-    quantiles_df = pd.DataFrame({
-        "Users": user_counts.quantile(quantiles),
-        "Movies": item_counts.quantile(quantiles)
-    })
-    quantiles_df.index = [f"{q:.1%}" for q in quantiles]
-    quantiles_df.index.name = "quantile"
-
-    if title:
-        print(f"\n{title}")
-    print(f"* Number of users: {n_users}")
-    print(f"* Mean number of ratings per user: {(user_counts.mean()):.2f}")
-    print(f"* Number of items (= movies): {n_items}")
-    print(f"* Mean number of ratings per movie: {(item_counts.mean()):.2f}")
-    print(f"* Number of interactions: {n_interact}")
-    print(f"* Density: {dens:.2f}%")
-    print(f"* Rating time span : {first_rating} - {last_rating}")
-    print(f"* Quantiles: ratings per user and per movie:\n")
-    pprint(quantiles_df)
-    
-    return user_counts, item_counts, rating_counts_func(ratings)
-
-def rating_counts_func(ratings):
-    return ratings['Rating'].value_counts().sort_index()
 
 def main():
     # set up argument parser:
@@ -73,7 +31,7 @@ def main():
     user_counts, item_counts, rating_counts = print_dataset_statistics(ratings, title="--- INITIAL DATASET STATISTICS ---")
     
     # Cumulative sum of number of ratings given over time (scaled to 0-1 interval):
-    timestamp_counts = ratings["Timestamp"].value_counts().sort_index()
+    timestamp_counts = ratings["Timestamp"].value_counts().sort_index()    
     rating_cumsum = timestamp_counts.cumsum() / ratings["Timestamp"].count()
 
     # plot results:
