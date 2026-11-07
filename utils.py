@@ -200,7 +200,7 @@ def split_by_user_activity(ds, ratings, cutoff = None, use_all_data = False):
         If use_all_data is True, split is done using the whole data set,
         otherwise training data set is used.   
 
-        NOTE: The split is only applied to test and validation sets.
+        NOTE: split is only applied to test and validation sets.
     '''
     if use_all_data:
         user_counts = ratings['UserID'].value_counts()
