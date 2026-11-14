@@ -119,14 +119,20 @@ def calc_metrics_stats(df, metrics, confidence=0.95):
         n = len(values)
         mean = values.mean()
         # standard error of mean:
-        sem = stats.sem(values) 
+        if n > 1:
+            sem = stats.sem(values) 
+        else: 
+            sem = 0.0
         # Student's t confidence interval:
-        ci_low, ci_high = stats.t.interval(
-            confidence,
-            df=n - 1,
-            loc=mean,
-            scale=sem
-        )
+        if sem > 1e-9:
+            ci_low, ci_high = stats.t.interval(
+                confidence,
+                df=n - 1,
+                loc=mean,
+                scale=sem
+            )
+        else:
+            ci_low, ci_high = [mean, mean]
         # store results:
         summary.append({
             "metric": metric,

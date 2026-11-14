@@ -24,17 +24,28 @@ def run_lf_sgd(split, ratings):
     if not skip_eval:
         # ------------ Hyperparameter evaluation -------------------------------
 
-        # set hyperparameter grid:
+        # set hyperparameter grid for MF model:
         # NOTE: number of combinations should add up to 20 (as in Part I)
         combos = {
             "k" : [10, 25, 50, 75, 100], # dimension of latent factors
-            "lr" : [1e-2, 5e-3],         # learning rate
+            "lr" : [1e-2, 1e-3],         # learning rate
             "lambda_reg": [1e-2, 1e-3]   # regularization parameter
         }
-        param_combos = [
+        combos_MF = [
             dict(zip(combos.keys(), combination))
             for combination in product(*combos.values())
         ]
+        # set hyperparameter grid for baseline model:
+        # NOTE: the number of combinations should be the same as above
+        combos = {
+            "lr": [1e-3, 5e-3, 1e-2, 2e-2],
+            "lambda_reg": [1e-3, 1e-2, 2e-2, 5e-2, 0.1]
+        }
+        combos_base = [
+            dict(zip(combos.keys(), combination))
+            for combination in product(*combos.values())
+        ]
+        
         # evaluation is done against validation data set:
         # NOTE: exclude_unknowns = True => 
         #       users/items appearing in test but unseen in training are excluded from evaluation.
@@ -46,37 +57,46 @@ def run_lf_sgd(split, ratings):
             exclude_unknowns=True,
         )
         print("* Latent factor CF: Performing hyperparameter search - this may take some tens of minutes... \n")
-        res = pd.DataFrame()
+        res_MF, res_base = pd.DataFrame(), pd.DataFrame()
 
-        # loop over hyperparameter combinations:
-        for i, c in enumerate(param_combos):
-            varied_params = {"k": c["k"],
-                             "lr": c["lr"],
-                             "lambda": c["lambda_reg"]}
+        # loop over hyperparameter combinations for baseline model:
+        for i, c in enumerate(combos_base):
+            varied_params = {"lr": c["lr"], "lambda": c["lambda_reg"]}
+            _, stats_df = eval_model(varied_params, eval_method_val, model_type="base")
+            stats_df["lr"], stats_df["lambda"]  = c["lr"], c["lambda_reg"] 
+            res_base= pd.concat([res_base, stats_df], ignore_index=True)
+            print(f"  Baseline model: Parameter combination {i+1} / 20 evaluated")
+            #print(f"{stats_df}")
+        # get the optimal parameter combination (ranked by mean value of NDCG@10):
+        opt_params_base = get_opt_params(res_base)
+        print("\n* Latent factor CF: Hyperparameter search finished for baseline model - optimal parameter values:\n" 
+              f"  lambda = {opt_params_base["lambda"]}, learning rate = {opt_params_base["lr"]}\n")
+        #best_res_base = res_base[(res_base["lr"] == opt_params_base["lr"]) & 
+        #                         (res_base["lambda"] == opt_params_base["lambda"])]
+        #print("\n* Latent factor CF: Hyperparameter search finished for baseline - error metrics for case with the largest NDCG@10:\n")
+        #print(best_res_base)
+
+        # loop over hyperparameter combinations for MF model:
+        for i, c in enumerate(combos_MF):
+            varied_params = {"k": c["k"], "lr": c["lr"], "lambda": c["lambda_reg"]}
             _, stats_df = eval_model(varied_params, eval_method_val)
             stats_df["k"], stats_df["lr"], stats_df["lambda"]  = c["k"], c["lr"], c["lambda_reg"] 
-            res= pd.concat([res, stats_df], ignore_index=True)
-            print(f" Parameter combination {i+1} / 20, results:")
-            print(f"{stats_df}")
-
-        # get the optimal parameter combination (ranked by mean value of NDCG@10)
-        tmp = res[res["metric"] == "NDCG@10"].sort_values(by=["mean"], ascending=False)
-        k_opt = tmp["k"].iloc[0]
-        lr_opt = tmp["lr"].iloc[0] 
-        lambda_opt = tmp["lambda"].iloc[0]
-        print("\n* Latent factor CF: Hyperparameter search finished - optimal parameter values found:\n" 
-              f"  k = {k_opt}, lambda = {lambda_opt}, learning rate = {lr_opt}")
-        opt_params = {"k": k_opt, "lr": lr_opt, "lambda": lambda_opt}
-        #best_res = res[(res["k"] == k_opt) & (res["lr"] == lr_opt) & (res["lambda"] == lambda_opt)]
+            res_MF= pd.concat([res_MF, stats_df], ignore_index=True)
+            print(f"  MF model: Parameter combination {i+1} / 20 evaluated")
+            #print(f"{stats_df}")
+        # get the optimal parameter combination (ranked by mean value of NDCG@10):
+        opt_params_MF = get_opt_params(res_MF)
+        print("\n* Latent factor CF: Hyperparameter search finished for MF model - optimal parameter values:\n" 
+              f"  k = {opt_params_MF["k"]}, lambda = {opt_params_MF["lambda"]}, learning rate = {opt_params_MF["lr"]}\n")
+        #best_res_MF = res_MF[(res_MF["k"] == opt_params_MF["k"]) & 
+        #                  (res_MF["lr"] == opt_params_MF["lr"]) & 
+        #                  (res_MF["lambda"] == opt_params_MF["lambda"])]
         #print("\n* Latent factor CF: Hyperparameter search finished - error metrics for model with the largest NDCG@10:\n")
-        #print(best_res)
+        #print(best_res_MF)
     else: 
-        # ---------- Hyperparameter evaluation skipped --------------
-        # use tuned hyperparameter values:
-        k_opt = 25
-        lambda_opt = 0.001 
-        lr_opt = 0.005
-        opt_params = {"k": k_opt, "lr": lr_opt, "lambda": lambda_opt}
+        # skip hyperparameter evaluation, use pre-calculated optimal hyperparameter values:
+        opt_params_base = {"lr": 0.001, "lambda": 0.001}
+        opt_params_MF = {"k": 25, "lr": 0.005, "lambda": 0.001 }
 
     # ------------ Tuned model vs baseline comparison ----------------
     eval_method_test = BaseMethod.from_splits(
@@ -85,11 +105,11 @@ def run_lf_sgd(split, ratings):
             rating_threshold=4.0, 
             exclude_unknowns=True,
     )
-    print("\n* Latent factor CF: Evaluating baseline model with user-item interactions ignored (against test data)...\n")
-    res, _ = eval_model(None, eval_method_test, model_type="base")
-    print(f"{res}\n")
-    print("* Latent factor CF: Evaluating tuned model (against test data)...\n")
-    _, summ_df_opt = eval_model(opt_params, eval_method_test) 
+    print("\n* Latent factor CF: Evaluating tuned baseline model (against test data)...\n")
+    _, summ_df_opt = eval_model(opt_params_base, eval_method_test, model_type="base")
+    print(f"{summ_df_opt}\n")
+    print("* Latent factor CF: Evaluating tuned MF model (against test data)...\n")
+    _, summ_df_opt = eval_model(opt_params_MF, eval_method_test) 
     print(f"{summ_df_opt}\n")
 
     # -------------- Segregated data: high / low activity users ------
@@ -107,11 +127,11 @@ def run_lf_sgd(split, ratings):
         exclude_unknowns=True,
     )
     
-    print("* Latent factor CF, data segregation - Evaluating tuned model (against test data with high-active users)...\n")
-    _, summ_df_high = eval_model(opt_params, eval_method_high)
+    print("* Latent factor CF: data segregation - Evaluating tuned MF model (against test data with high-active users)...\n")
+    _, summ_df_high = eval_model(opt_params_MF, eval_method_high)
     print(f"{summ_df_high}\n")
-    print("* Latent factor CF, data segregation - Evaluating tuned model (against test data with low-active users)...\n")
-    _, summ_df_low = eval_model(opt_params, eval_method_low)
+    print("* Latent factor CF: data segregation - Evaluating tuned MF model (against test data with low-active users)...\n")
+    _, summ_df_low = eval_model(opt_params_MF, eval_method_low)
     print(f"{summ_df_low}\n")
 
     # -------------- Segregated data: popular / long-tail items -------------------
@@ -128,11 +148,11 @@ def run_lf_sgd(split, ratings):
         rating_threshold=4.0,
         exclude_unknowns=True,
     )
-    print("* Latent factor CF, data segregation - Evaluating tuned model (against test data with popular items)...\n")
-    _, summ_df_pop = eval_model(opt_params, eval_method_pop)
+    print("* Latent factor CF: data segregation - Evaluating tuned MF model (against test data with popular items)...\n")
+    _, summ_df_pop = eval_model(opt_params_MF, eval_method_pop)
     print(f"{summ_df_pop}\n")
-    print("* Latent factor CF, data segregation - Evaluating tuned model (against test data with long-tail items)...\n")
-    _, summ_df_tail = eval_model(opt_params, eval_method_tail)
+    print("* Latent factor CF: data segregation - Evaluating tuned MF model (against test data with long-tail items)...\n")
+    _, summ_df_tail = eval_model(opt_params_MF, eval_method_tail)
     print(f"{summ_df_tail}\n")
 
     # -------------- Subsampling training data -------------------------------------
@@ -146,9 +166,11 @@ def run_lf_sgd(split, ratings):
             rating_threshold=4.0,
             exclude_unknowns=True,
         )
-        print(f"* Latent factor CF, subsampling - Evaluating tuned model (training data pruned by {100*(1-ratio)}%, evaluation against test data):\n")
-        _, summ_df_sub[i] = eval_model(opt_params, eval_method_sparse)
+        print(f"* Latent factor CF: subsampling - Evaluating tuned MF model (training data pruned by {100*(1-ratio)}%, evaluation against test data):\n")
+        _, summ_df_sub[i] = eval_model(opt_params_MF, eval_method_sparse)
         print(f"{summ_df_sub[i]}\n")
+
+    print("* Latent factor CF: Model calculations completed.\n")
 
     # check_unknowns(split.train, split.test)
 
@@ -158,10 +180,11 @@ def eval_model(varied_params,
                metrics= [Precision(k=10), Recall(k=10), NDCG(k=10)], 
                summ_metrics=["Precision@10", "Recall@10", "NDCG@10", "coverage"]):
     ''' Evaluate latent factor CF model / baseline recommender over a set of seed values for fixed hyperparameters.
-        For API documentation of the LF CF method, see:
+        For API documentation, see:
         https://cornac.readthedocs.io/en/stable/api_ref/models.html#module-cornac.models.mf.recom_mf
         For API documentation of the baseline method, see:
-        https://cornac.readthedocs.io/en/stable/api_ref/models.html#baseline-only
+        https://cornac.readthedocs.io/en/stable/api_ref/models.html#baseline-only, and docstrings in:
+        https://github.com/PreferredAI/cornac/blob/v3.1.0/cornac/models/baseline_only/recom_bo.pyx
 
         * Input: 
           - varied_params : None / dict containing varied hyperparameters and their values
@@ -169,7 +192,7 @@ def eval_model(varied_params,
           - model_type : Matrix Factorization model ("MF"), or baseline model ("base")
           - metrics : Cornac evaluation metrics
           - summ_metrics : metrics columns in output dataframe
-         Output: 
+        * Output: 
           - res : list where an element contains results from a single model run 
           - stats_df : overall statistics of the model runs
     '''
@@ -177,7 +200,8 @@ def eval_model(varied_params,
         raise ValueError("Input argument 'model_type' must be 'MF' (= Matrix Factorization) or 'base' (= baseline model).")
     # set hyperparameter values:
     if varied_params is not None:
-        k = varied_params["k"]
+        if "k" in varied_params:
+            k = varied_params["k"]
         learning_rate = varied_params["lr"]
         lambda_reg = varied_params["lambda"]    
     # suppress refitting warnings:
@@ -202,8 +226,15 @@ def eval_model(varied_params,
             model.fit(eval_method_eval.train_set)
         elif model_type == "base":
             # init baseline model 
-            # NOTE: single threaded execution is used to ensure reproducibility of the results
-            model = BaselineOnly(num_threads=1)
+            # NOTE: uses single threaded execution to ensure reproducibility of the results
+            if varied_params is None:
+                model = BaselineOnly(num_threads=1)
+            else:
+                model = BaselineOnly(   
+                    learning_rate=learning_rate,
+                    lambda_reg=lambda_reg,
+                    seed=seed,
+                )
             eval_method_eval = copy.copy(eval_method)
             # convert training data types to avoid type errors:
             eval_method_eval.train_set = copy.copy(eval_method.train_set)
@@ -236,9 +267,10 @@ def eval_model(varied_params,
             "coverage": coverage
         }
         res_all.append(res)
-        if model_type == "base": 
-            # seed has no effect on baseline model
-            return pd.DataFrame(res_all), None
+        # baseline results do not depend on the seed value:
+        if varied_params is None or model_type == "base": 
+            #return pd.DataFrame(res_all), None
+            break
     # calculate error metrics:
     res_all = pd.DataFrame(res_all)
     _, stats_df = calc_metrics_stats(
@@ -248,6 +280,20 @@ def eval_model(varied_params,
     )
 
     return res_all, stats_df
+
+def get_opt_params(res):
+    ''' Get optimal set of parameters from df containing results from a set of model runs. 
+        Here models are ranked in terms of performance by metric NDCG@10. 
+    '''
+    tmp = res[res["metric"] == "NDCG@10"].sort_values(by=["mean"], ascending=False)
+    lr_opt = tmp["lr"].iloc[0] 
+    lambda_opt = tmp["lambda"].iloc[0]
+    if "k" in tmp.columns:
+        k_opt = tmp["k"].iloc[0]
+    else:
+        k_opt = None
+    return {"k": k_opt, "lr": lr_opt, "lambda": lambda_opt}
+
 
 def conv_to_list(df):
     ''' convert training/test/validation data set to list. '''
