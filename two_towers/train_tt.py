@@ -18,6 +18,7 @@ def run_two_tower_experiment(
     batch_size: int = 4096,
     learning_rate: float = 1e-3,
     negative_ratio: int = 1,
+    loss: str = "bce",
     seed: int = 42,
 ) -> dict[str, dict[str, float]]:
     """Train on train, report validation, refit, and report final test scores."""
@@ -37,6 +38,7 @@ def run_two_tower_experiment(
         batch_size=batch_size,
         learning_rate=learning_rate,
         negative_ratio=negative_ratio,
+        loss=loss,
         seed=seed,
     )
     model.fit(split.train, catalogue=catalogue)
@@ -58,6 +60,7 @@ def run_two_tower_experiment(
         batch_size=batch_size,
         learning_rate=learning_rate,
         negative_ratio=negative_ratio,
+        loss=loss,
         seed=seed,
     )
     final_model.fit(combined_train, catalogue=catalogue)
@@ -82,6 +85,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--negative-ratio", type=int, default=1)
+    parser.add_argument("--loss", choices=("bce", "bpr"), default="bce")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--sweep",
@@ -115,6 +119,7 @@ def main() -> None:
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,
                 negative_ratio=args.negative_ratio,
+                loss=args.loss,
                 seed=args.seed,
             )
             results.append({**configuration, **scores["validation"], **{
@@ -143,6 +148,7 @@ def main() -> None:
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         negative_ratio=args.negative_ratio,
+        loss=args.loss,
         seed=args.seed,
     )
 

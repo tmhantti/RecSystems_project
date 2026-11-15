@@ -74,6 +74,7 @@ class TwoTowerRecommender:
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-6,
         negative_ratio: int = 1,
+        loss: str = "bce",
         positive_threshold: float = 4.0,
         dropout: float = 0.1,
         seed: int = 42,
@@ -85,6 +86,8 @@ class TwoTowerRecommender:
             raise ValueError("epochs, batch_size, and negative_ratio must be positive.")
         if learning_rate <= 0 or weight_decay < 0:
             raise ValueError("learning_rate must be positive and weight_decay non-negative.")
+        if loss not in {"bce", "bpr"}:
+            raise ValueError("loss must be 'bce' or 'bpr'.")
         if not 0 <= dropout < 1:
             raise ValueError("dropout must be in the range [0, 1).")
 
@@ -95,6 +98,7 @@ class TwoTowerRecommender:
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.negative_ratio = negative_ratio
+        self.loss = loss
         self.positive_threshold = positive_threshold
         self.dropout = dropout
         self.seed = seed
@@ -166,30 +170,42 @@ class TwoTowerRecommender:
         self.history_: list[float] = []
 
         for epoch in range(1, self.epochs + 1):
-            user_indices, item_indices, labels = self._make_training_examples(
+            user_indices, positive_items, negative_items = self._make_training_examples(
                 positive_pairs, seen_by_user, len(catalogue_ids), rng
             )
             dataset = TensorDataset(
                 torch.tensor(user_indices, dtype=torch.long),
-                torch.tensor(item_indices, dtype=torch.long),
-                torch.tensor(labels, dtype=torch.float32),
+                torch.tensor(positive_items, dtype=torch.long),
+                torch.tensor(negative_items, dtype=torch.long),
             )
             loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
             self.model_.train()
             total_loss = 0.0
             total_examples = 0
-            for batch_users, batch_items, batch_labels in loader:
+            for batch_users, batch_positive_items, batch_negative_items in loader:
                 batch_users = batch_users.to(self.device)
-                batch_items = batch_items.to(self.device)
-                batch_labels = batch_labels.to(self.device)
+                batch_positive_items = batch_positive_items.to(self.device)
+                batch_negative_items = batch_negative_items.to(self.device)
                 optimizer.zero_grad()
-                loss = loss_function(
-                    self.model_(batch_users, batch_items), batch_labels
-                )
-                loss.backward()
+                positive_scores = self.model_(batch_users, batch_positive_items)
+                negative_scores = self.model_(batch_users, batch_negative_items)
+                if self.loss == "bpr":
+                    batch_loss = -torch.nn.functional.logsigmoid(
+                        positive_scores - negative_scores
+                    ).mean()
+                else:
+                    scores = torch.cat((positive_scores, negative_scores))
+                    labels = torch.cat(
+                        (
+                            torch.ones_like(positive_scores),
+                            torch.zeros_like(negative_scores),
+                        )
+                    )
+                    batch_loss = loss_function(scores, labels)
+                batch_loss.backward()
                 optimizer.step()
-                total_loss += float(loss.item()) * len(batch_labels)
-                total_examples += len(batch_labels)
+                total_loss += float(batch_loss.item()) * len(batch_users)
+                total_examples += len(batch_users)
             epoch_loss = total_loss / total_examples
             self.history_.append(epoch_loss)
             print(f"Two-tower epoch {epoch}/{self.epochs}: loss={epoch_loss:.4f}")
@@ -238,28 +254,25 @@ class TwoTowerRecommender:
         rng: np.random.Generator,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         user_indices: list[int] = []
-        item_indices: list[int] = []
-        labels: list[float] = []
+        positive_items: list[int] = []
+        sampled_negative_items: list[int] = []
         all_items = np.arange(n_items)
         for user_index, item_index in positive_pairs:
-            user_indices.append(user_index)
-            item_indices.append(item_index)
-            labels.append(1.0)
             available = np.setdiff1d(all_items, seen_by_user[user_index], assume_unique=True)
             if len(available) == 0:
                 continue
-            negative_items = rng.choice(
+            sampled_items = rng.choice(
                 available,
                 size=self.negative_ratio,
                 replace=len(available) < self.negative_ratio,
             )
             user_indices.extend([user_index] * self.negative_ratio)
-            item_indices.extend(int(value) for value in negative_items)
-            labels.extend([0.0] * self.negative_ratio)
+            positive_items.extend([item_index] * self.negative_ratio)
+            sampled_negative_items.extend(int(value) for value in sampled_items)
         return (
             np.asarray(user_indices, dtype=np.int64),
-            np.asarray(item_indices, dtype=np.int64),
-            np.asarray(labels, dtype=np.float32),
+            np.asarray(positive_items, dtype=np.int64),
+            np.asarray(sampled_negative_items, dtype=np.int64),
         )
 
     def _check_fitted(self) -> None:
