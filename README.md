@@ -1,7 +1,7 @@
 
 # Project work for course Recommender Systems (DATA.ML.360), Autumn 2026
 
-_Authors_ : Tatu Anttila @tmhantti , Arttu Kiviranta @akiviranta , Patrik Salmensaari @pasasalm
+_Authors_: Tatu Anttila [@tmhantti](https://github.com/tmhantti), Arttu Kiviranta [@akiviranta](https://github.com/akiviranta), Patrik Salmensaari [@pasasalm](https://github.com/pasasalm)
 
 ##   Current stage of the work 
 
@@ -38,12 +38,19 @@ The project was done using Python 3.12 using package manager _**venv**_. After c
 
 ## Code execution
 
-To run the code, type:
+Run the project-level script from the repository root:
 ```
 python run_all.py -d .\data-1ml
 ```
 
-For command line options, type
+For example, to run an individual experiment from the repository root:
+```
+python content_recommender.py -d .\data-1ml
+python knn_recommender.py -d .\data-1ml
+python -m two_towers.train_tt -d .\data-1ml
+```
+
+To see a script's command-line options, add `-h`, for example:
 ```
 python run_all.py -h
 ```

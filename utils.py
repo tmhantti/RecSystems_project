@@ -15,6 +15,7 @@ USER_COLUMNS = ["UserID", "Gender", "Age", "Occupation", "Zip-code"]
 MOVIE_COLUMNS = ["MovieID", "Title", "Genres"]
 # random states used to calculate variability of modeling results:
 RAND_STATES = list(range(0, 10))
+DEFAULT_BOOTSTRAP_ITERATIONS = 2000
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,136 @@ def calc_metrics_stats(df, metrics, confidence=0.95):
             "conf_int": [ci_low, ci_high],
         })
     return summary, pd.DataFrame(summary)
+
+
+def per_user_metrics_for_relevance(
+    recommendations: dict[int, list[int]],
+    relevant_by_user: dict[int, set[int]],
+    k: int = 10,
+) -> pd.DataFrame:
+    """Calculate Precision@k, Recall@k, and NDCG@k for each user."""
+    if k < 1:
+        raise ValueError("k must be positive.")
+
+    rows = []
+    for user_id, relevant_items in relevant_by_user.items():
+        if not relevant_items:
+            continue
+        ranked = recommendations.get(user_id, [])[:k]
+        hits = [item for item in ranked if item in relevant_items]
+        dcg = sum(
+            1.0 / np.log2(rank + 2)
+            for rank, item in enumerate(ranked)
+            if item in relevant_items
+        )
+        ideal_hits = min(len(relevant_items), k)
+        idcg = sum(1.0 / np.log2(rank + 2) for rank in range(ideal_hits))
+        rows.append(
+            {
+                "UserID": user_id,
+                f"precision_at_{k}": len(hits) / k,
+                f"recall_at_{k}": len(hits) / len(relevant_items),
+                f"ndcg_at_{k}": dcg / idcg if idcg else 0.0,
+            }
+        )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "UserID",
+            f"precision_at_{k}",
+            f"recall_at_{k}",
+            f"ndcg_at_{k}",
+        ],
+    )
+
+
+def per_user_ranking_metrics(
+    recommendations: dict[int, list[int]],
+    held_out: pd.DataFrame,
+    k: int = 10,
+    positive_threshold: float = 4.0,
+) -> pd.DataFrame:
+    """Calculate per-user ranking metrics for positive held-out ratings."""
+    relevant_by_user = (
+        held_out[held_out["Rating"] >= positive_threshold]
+        .groupby("UserID")["MovieID"]
+        .agg(set)
+        .to_dict()
+    )
+    return per_user_metrics_for_relevance(recommendations, relevant_by_user, k=k)
+
+
+def bootstrap_mean_confidence_interval(
+    values: Iterable[float],
+    confidence: float = 0.95,
+    n_bootstrap: int = DEFAULT_BOOTSTRAP_ITERATIONS,
+    random_state: int = 42,
+) -> tuple[float, float]:
+    """Estimate a bootstrap confidence interval for the mean of independent values."""
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between 0 and 1.")
+    if n_bootstrap < 1:
+        raise ValueError("n_bootstrap must be positive.")
+
+    values = np.asarray(list(values), dtype=float)
+    if not len(values):
+        return float("nan"), float("nan")
+    if len(values) == 1:
+        return float(values[0]), float(values[0])
+
+    rng = np.random.default_rng(random_state)
+    bootstrap_means = np.empty(n_bootstrap)
+    for iteration in range(n_bootstrap):
+        bootstrap_means[iteration] = rng.choice(
+            values, size=len(values), replace=True
+        ).mean()
+    tail_probability = (1.0 - confidence) / 2.0
+    low, high = np.quantile(
+        bootstrap_means, [tail_probability, 1.0 - tail_probability]
+    )
+    return float(low), float(high)
+
+
+def paired_metric_comparison(
+    model_a: str,
+    metrics_a: pd.DataFrame,
+    model_b: str,
+    metrics_b: pd.DataFrame,
+    metric: str = "ndcg_at_10",
+    confidence: float = 0.95,
+    n_bootstrap: int = 2000,
+    random_state: int = 42,
+) -> dict[str, float | int | str]:
+    """Compare two models on paired per-user metric values."""
+    paired = metrics_a[["UserID", metric]].merge(
+        metrics_b[["UserID", metric]],
+        on="UserID",
+        suffixes=("_a", "_b"),
+    )
+    differences = (paired[f"{metric}_a"] - paired[f"{metric}_b"]).to_numpy()
+    ci_low, ci_high = bootstrap_mean_confidence_interval(
+        differences,
+        confidence=confidence,
+        n_bootstrap=n_bootstrap,
+        random_state=random_state,
+    )
+    if not len(differences):
+        p_value = float("nan")
+        mean_difference = float("nan")
+    elif np.allclose(differences, 0):
+        p_value = 1.0
+        mean_difference = 0.0
+    else:
+        p_value = float(stats.wilcoxon(differences).pvalue)
+        mean_difference = float(np.mean(differences))
+    return {
+        "comparison": f"{model_a} - {model_b}",
+        "users": len(differences),
+        f"mean_{metric}_difference": mean_difference,
+        "difference_ci_95": f"[{ci_low:.4f}, {ci_high:.4f}]",
+        "wilcoxon_p_value": p_value,
+    }
+
 
 def filter_ratings(
     ratings: pd.DataFrame,

@@ -21,6 +21,7 @@ from most_popular import (
     get_min_timestamp, 
     run_most_popular_experiment
 )
+from content_recommender import run_content_experiment
 from knn_recommender import run_knn_experiment
 from lf_sgd import run_lf_sgd
 
@@ -84,6 +85,9 @@ def main():
 
     print("\n*** Running kNN-recommender (Part I) ***\n")
     run_knn_experiment(args.data_dir)
+
+    print("\n*** Running Content-Based Part 2 Experiment ***\n")
+    run_content_experiment(args.data_dir)
 
     # NOTE: comment following routine call out if you don't want to wait for up to around 20 mins. to get the results 
     #print("\n*** Running latent factor collaborative filtering (LF CF) model (Part II) ***\n")
