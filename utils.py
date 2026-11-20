@@ -330,7 +330,7 @@ def temporal_split(
         test=test.sort_index(),
     )
 
-def split_by_user_activity(ds, ratings, cutoff = None, use_all_data = False):
+def split_by_user_activity(ds, ratings, cutoff = 100, use_all_data = False):
     ''' Splits TemporalSplit dataset (ds) into two based on user activity.
         Input cutoff is the number of ratings/user used as criterion in splitting.
         Default cutoff value is the median value of ratings/user count.
@@ -362,7 +362,7 @@ def split_by_user_activity(ds, ratings, cutoff = None, use_all_data = False):
 
     return ds_low, ds_high
 
-def split_by_popularity(ds, ratings, cutoff = 1000, use_all_data = True):
+def split_by_popularity(ds, ratings, cutoff = 142, use_all_data = False):
     ''' Splits TemporalSplit dataset (ds) into two based on the movie popularity: 
         highly popular items versus long-tail items.
         Input cutoff is the number of ratings/movie used as criterion in splitting.

@@ -19,7 +19,7 @@ def run_lf_sgd(split, ratings):
        https://cornac.readthedocs.io/en/latest/api_ref/models.html#module-cornac.models.mf.recom_mf 
     '''
     # skip hyperparameter evaluation and use previously found optimal hyperparameter values?
-    skip_eval = False
+    skip_eval = True
 
     if not skip_eval:
         # ------------ Hyperparameter evaluation -------------------------------
@@ -96,7 +96,8 @@ def run_lf_sgd(split, ratings):
     else: 
         # skip hyperparameter evaluation, use pre-calculated optimal hyperparameter values:
         opt_params_base = {"lr": 0.001, "lambda": 0.001}
-        opt_params_MF = {"k": 25, "lr": 0.005, "lambda": 0.001 }
+        opt_params_MF = {"k": 10, "lr": 0.01, "lambda": 0.001 }
+        # k = 10, lambda = 0.001, learning rate = 0.01
 
     # ------------ Tuned model vs baseline comparison ----------------
     eval_method_test = BaseMethod.from_splits(
@@ -113,7 +114,7 @@ def run_lf_sgd(split, ratings):
     print(f"{summ_df_opt}\n")
 
     # -------------- Segregated data: high / low activity users ------
-    high_act_ds, low_act_ds = split_by_user_activity(split, ratings)
+    high_act_ds, low_act_ds = split_by_user_activity(split, ratings, cutoff= 100)
     eval_method_high = BaseMethod.from_splits(
         train_data=conv_to_list(split.train),
         test_data=conv_to_list(high_act_ds.test),
@@ -135,7 +136,7 @@ def run_lf_sgd(split, ratings):
     print(f"{summ_df_low}\n")
 
     # -------------- Segregated data: popular / long-tail items -------------------
-    pop_ds, tail_ds = split_by_popularity(split, ratings)
+    pop_ds, tail_ds = split_by_popularity(split, ratings, cutoff=142)
     eval_method_pop = BaseMethod.from_splits(
         train_data=conv_to_list(split.train),
         test_data=conv_to_list(pop_ds.test),
