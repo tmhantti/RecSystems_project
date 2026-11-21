@@ -50,6 +50,19 @@ python knn_recommender.py -d .\data-1ml
 python -m two_towers.train_tt -d .\data-1ml
 ```
 
+On macOS/Linux, activate the environment with `source .venv/bin/activate` and use `/` in paths, e.g. `python run_all.py -d ./data-1ml`.
+
+### Two-tower recommender (self-implemented, Part II)
+
+`run_all.py` trains and evaluates the two-tower model by default, using the configuration selected on validation (BPR loss, all side features, embedding 64, hidden 128, 40 epochs). This takes roughly 1.5 hours on a laptop CPU. Pass `--skip-two-tower` to skip it. The individual steps are:
+```
+python -m two_towers.train_tt -d ./data-1ml --seed-count 10   # seeds 42-51, 95% CIs
+python -m two_towers.two_tower_metrics -d ./data-1ml          # paired test vs item-kNN, disaggregation, sparsity ablation
+```
+* Seeds: model seeds 42–51 for the multi-seed run; sparsity subsamples use seeds 0–2 (`utils.RAND_STATES`); bootstrap intervals use seed 42.
+* `--seed-count 10` saves the final seed-51 model to `two_towers/confidence_interval_last_seed.pt`, which `two_tower_metrics` loads. If the file is missing, it is retrained automatically. The checkpoint is not committed because it contains MovieLens ratings.
+* `two_tower_metrics` writes its CSV files to `report_and_results/two_tower_metrics/`.
+
 To see a script's command-line options, add `-h`, for example:
 ```
 python run_all.py -h

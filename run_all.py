@@ -24,6 +24,8 @@ from most_popular import (
 from content_recommender import run_content_experiment
 from knn_recommender import run_knn_experiment
 from lf_sgd import run_lf_sgd
+from two_towers.train_tt import run_multi_seed
+from two_towers.two_tower_metrics import run_two_tower_metrics
 
 # subfolder for plots:
 plot_path = Path.cwd() / "plots" 
@@ -32,6 +34,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--data_dir", type=Path, required=True,
                         help="subfolder containing input data files")
+    parser.add_argument("--skip-two-tower", action="store_true",
+                        help="skip the two-tower experiments (about 1.5 hours on a laptop CPU)")
     args = parser.parse_args()
     
     _users, ratings, movies = load_movielens(args.data_dir)
@@ -88,6 +92,13 @@ def main():
 
     print("\n*** Running Content-Based Part 2 Experiment ***\n")
     run_content_experiment(args.data_dir)
+
+    if not args.skip_two_tower:
+        print("\n*** Running two-tower recommender, 10 seeds (Part II) ***\n")
+        run_multi_seed(args.data_dir, first_seed=42, seed_count=10)
+
+        print("\n*** Two-tower paired comparison, disaggregation and sparsity ablation (Part II) ***\n")
+        run_two_tower_metrics(args.data_dir, ablation_seeds=3)
 
     # NOTE: comment following routine call out if you don't want to wait for up to around 20 mins. to get the results 
     #print("\n*** Running latent factor collaborative filtering (LF CF) model (Part II) ***\n")
