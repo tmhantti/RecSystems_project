@@ -1,6 +1,7 @@
 
 from matplotlib import pyplot as plt
 from pathlib import Path
+import numpy as np
 
 def hist_user_item_count(user_counts, item_counts,
                          semilog_y=False, plot_path=None):
@@ -180,3 +181,6 @@ def plot_knn_validation_results(results, plot_path=None):
         plt.close(fig)
     else:
         plt.show()
+
+
+

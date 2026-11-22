@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import sys
 
 from utils import (
     load_movielens, 
@@ -26,6 +27,7 @@ from knn_recommender import run_knn_experiment
 from lf_sgd import run_lf_sgd
 from two_towers.train_tt import run_multi_seed
 from two_towers.two_tower_metrics import run_two_tower_metrics
+from diversity import rerank_with_mmr
 
 # subfolder for plots:
 plot_path = Path.cwd() / "plots" 
@@ -89,8 +91,8 @@ def main():
 
     print("\n*** Running kNN-recommender (Part I) ***\n")
     run_knn_experiment(args.data_dir)
-
-    print("\n*** Running Content-Based Part 2 Experiment ***\n")
+    
+    print("\n*** Running Content-Based recommender (Part II) ***\n")
     run_content_experiment(args.data_dir)
 
     if not args.skip_two_tower:
@@ -101,8 +103,10 @@ def main():
         run_two_tower_metrics(args.data_dir, ablation_seeds=3)
 
     # NOTE: comment following routine call out if you don't want to wait for up to around 20 mins. to get the results 
-    #print("\n*** Running latent factor collaborative filtering (LF CF) model (Part II) ***\n")
-    #run_lf_sgd(split, ratings)
-
+    print("\n*** Running latent factor collaborative filtering (LF CF) model (Part II) ***\n")
+    run_lf_sgd(split, ratings)
+    
+    #print("\n** Reranking intervention with MMR (Part III)")
+    #rerank_with_mmr(args.data_dir, plot_path)
 if __name__ == "__main__":
     main()

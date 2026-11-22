@@ -2,6 +2,7 @@
 
 import argparse
 from collections.abc import Iterable
+from itertools import islice
 from pathlib import Path
 
 import numpy as np
@@ -110,6 +111,37 @@ class ItemKNNRecommender:
     def recommend_all(self, user_ids: Iterable[int], n: int = 10) -> dict[int, list[int]]:
         """Return recommendations for each requested user."""
         return {user_id: self.recommend(user_id, n=n) for user_id in user_ids}
+
+    def get_n_scores(self, user_id, n = 10):
+        """Return up to n item IDs and their scores for one user as dict."""
+        self._check_fitted()
+        if n < 1:
+            raise ValueError("n must be positive.")
+
+        user_ratings = self.train_ratings_[self.train_ratings_["UserID"] == user_id]
+        seen_items = set(user_ratings["MovieID"])
+        candidate_scores: dict[int, float] = {}
+
+        for item_id in seen_items:
+            item_row = self.item_index_.get(item_id)
+            if item_row is None:
+                continue
+            for neighbor_row, similarity in zip(
+                self.neighbors_[item_row],
+                self.similarities_[item_row],
+            ):
+                candidate_id = int(self.item_ids_[neighbor_row])
+                if candidate_id not in seen_items:
+                    candidate_scores[candidate_id] = (
+                        candidate_scores.get(candidate_id, 0.0) + float(similarity)
+                    )
+        sorted_scores = dict(sorted(candidate_scores.items(), key=lambda item: item[1], reverse=True))
+        #ranked = sorted(candidate_scores, key=candidate_scores.get, reverse=True)
+        return dict(islice(sorted_scores.items(), n)) 
+
+    def get_all_scores(self, user_ids, n):
+        """Return scores for each requested user."""
+        return {user_id: self.get_n_scores(user_id, n=n) for user_id in user_ids}
 
     def _check_fitted(self) -> None:
         if not self._fitted:
