@@ -5,15 +5,17 @@ _Authors_: Tatu Anttila [@tmhantti](https://github.com/tmhantti), Arttu Kivirant
 
 ##   Current stage of the work 
 
-All required material are committed to the repository for Part I evaluation.
+All required material are committed to the repository for Part II evaluation.
 
-## Repository contents
+## Repository contents  
 
 ### Subfolders
 
 * **_report_and_results_** - contains report (*Recommender_Systems_Report.docx*) and results (*Recommender_Systems_Results.xlsm*) assignment files. 
 
 * **_plots_**              - contains figures created by the code.
+ 
+* **_two_towers**          - contains implementation of two tower recommender for Part II. 
 
 ## Project setup
 
