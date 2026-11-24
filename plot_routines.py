@@ -66,6 +66,7 @@ def plot_cum_ratings(rating_cumsum, plot_path= None):
     plt.tight_layout()
     if plot_path is not None:
         plt.savefig(plot_path / "ratings_cum_count.png")
+        plt.close()
     else:
         plt.show()
 
@@ -87,6 +88,7 @@ def hist_ratings(ratings, rating_counts, plot_path= None):
     plt.tight_layout()
     if plot_path is not None:
         plt.savefig(plot_path / "hist_ratings.png")
+        plt.close()
     else:
         plt.show()
 

@@ -188,7 +188,6 @@ def sparsity_ablation(
     )
     return results
 
-
 def print_table(title, frame):
     print(f"\n--- {title} ---")
     print(frame.to_string(index=False))

@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 from pathlib import Path
+from itertools import islice
 
 import numpy as np
 import pandas as pd
@@ -284,11 +285,45 @@ class TwoTowerRecommender:
             if int(self.item_ids_[index]) not in seen_items
         ][:n]
 
+    def recommend_with_scores(self, user_id: int, n: int = 10) -> list[int]:
+        """Return up to n highest-scoring unseen items and their scores for a known user."""
+        self._check_fitted()
+        if n < 1:
+            raise ValueError("n must be positive.")
+        user_index = self.user_index_.get(int(user_id))
+        if user_index is None:
+            return []
+
+        item_indices = torch.arange(len(self.item_ids_), device=self.device)
+        user_indices = torch.full_like(item_indices, user_index)
+        self.model_.eval()
+        with torch.no_grad():
+            scores = self.model_(user_indices, item_indices).cpu().numpy()
+
+        seen_items = set(
+            self.train_ratings_.loc[
+                self.train_ratings_["UserID"] == user_id, "MovieID"
+            ].astype(int)
+        )
+        ranked_indices = np.argsort(-scores)
+        all_recs = {
+            int(self.item_ids_[index]) : scores[index]
+            for index in ranked_indices
+            if int(self.item_ids_[index]) not in seen_items
+        }
+        return dict(islice(all_recs.items(), n)) 
+
     def recommend_all(
         self, user_ids: Iterable[int], n: int = 10
     ) -> dict[int, list[int]]:
         """Return recommendations for each requested user."""
         return {int(user_id): self.recommend(int(user_id), n=n) for user_id in user_ids}
+
+    def recommend_all_with_scores(
+        self, user_ids: Iterable[int], n: int = 10
+    ) -> dict[int, list[int]]:
+        """Return recommendations for each requested user as dict {item_idx : score}."""
+        return {int(user_id): self.recommend_with_scores(int(user_id), n=n) for user_id in user_ids}
 
     def save(self, path: str | Path) -> None:
         """Save the fitted model and recommender state to a local checkpoint."""
