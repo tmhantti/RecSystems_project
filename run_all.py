@@ -94,7 +94,6 @@ def main():
     
     print("\n*** Running Content-Based recommender (Part II) ***\n")
     run_content_experiment(args.data_dir)
-
     
     if not args.skip_two_tower:
         print("\n*** Running two-tower recommender, 10 seeds (Part II) ***\n")
@@ -103,7 +102,6 @@ def main():
         print("\n*** Two-tower paired comparison, disaggregation and sparsity ablation (Part II) ***\n")
         run_two_tower_metrics(args.data_dir, ablation_seeds=3)
     
-    # NOTE: comment following routine call out if you don't want to wait for up to around 20 mins. to get the results 
     print("\n*** Running latent factor collaborative filtering (LF CF) model (Part II) ***\n")
     run_lf_sgd(split, ratings)
     

@@ -21,7 +21,6 @@ K = 10
 
 def rerank_with_mmr(data_dir, plot_path):
     _, _, movies = load_movielens(data_dir)
-
     # load / train the final two towers model:
     split, final_train, catalogue, user_features, item_features = load_protocol(data_dir)
     test_users = split.test["UserID"].unique()
@@ -30,7 +29,6 @@ def rerank_with_mmr(data_dir, plot_path):
     tt_model = load_or_train_two_tower(
             model_path, final_train, catalogue, user_features, item_features, seed
         )
-
     # get N_RECS most relevant items + their scores for each user as dict ( {userId : {movieID: score} }
     user_rel = tt_model.recommend_all_with_scores(test_users, n=N_RECS)
     # get all recommended items and remove users without any recommendations:
@@ -74,7 +72,7 @@ def rerank_with_mmr(data_dir, plot_path):
             "recall_at_10": scores["recall_at_10"],
             "ndcg_at_10": scores["ndcg_at_10"],
             "intra_list_diversity": ild(lists, S),
-            "coverage": coverage(lists, n_items_tot),
+            "coverage": scores["catalogue_coverage"],
             "gini": gini(lists, n_items),
             "calibration_error": calibration_error(lists, user_hist_dist, G),
         }
@@ -84,7 +82,7 @@ def rerank_with_mmr(data_dir, plot_path):
         print(f" * Recall@10              : {scores['recall_at_10']:.4f}")
         print(f" * NDCG@10                : {scores['ndcg_at_10']:.4f}")
         print(f" * Intra-list diversity   : {ild(lists, S):.4f}")
-        print(f" * Coverage               : {coverage(lists, n_items_tot):.4f}")
+        print(f" * Coverage               : {scores["catalogue_coverage"]:.4f}")
         print(f" * Gini coefficient       : {gini(lists, n_items):.4f}")
         print(f" * Calibration error      : {calibration_error(lists, user_hist_dist, G):.4f}")
 
