@@ -7,7 +7,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MultiLabelBinarizer
 from matplotlib import pyplot as plt
 
-from utils import load_movielens # , filter_ratings,  temporal_split
+from plot_routines import plot_acc_div_frontier, plot_metrics_vs_lambda
+from utils import load_movielens
 from two_towers.two_tower_metrics import (load_protocol, 
                                           load_or_train_two_tower, 
                                           DEFAULT_SEED, 
@@ -15,8 +16,8 @@ from two_towers.two_tower_metrics import (load_protocol,
 from two_towers.two_tower_metrics import evaluate_at_k as tt_evaluate_at_k
 
 # number of recommendations per user retrieved from the original recommender
-N_RECS = 2000
-# number of recommendations per user given by reranker:
+N_RECS = 100
+# number of recommendations per user given by the MMR re-ranking:
 K = 10 
 
 def rerank_with_mmr(data_dir, plot_path):
@@ -42,7 +43,7 @@ def rerank_with_mmr(data_dir, plot_path):
             no_recs_users.append(u)
     user_rel = {k: v for k, v in user_rel.items() if k not in no_recs_users}
     item_ids = sorted(item_ids)
-    print(f"* MMR reranking : removed {len(no_recs_users)} test users with no recommendations by the original recommender.")
+    print(f"* MMR re-ranking : removed {len(no_recs_users)} test users with no recommendations by the original recommender.")
     # convert to numpy array
     rel_m, user_ids = dict_to_matrix(user_rel, item_ids)
     # get item genres as binary numpy array (rows = item genre vectors):
@@ -50,11 +51,12 @@ def rerank_with_mmr(data_dir, plot_path):
     G, _, genre_names = genres_to_matrix(movies_filtered)
     # calculate item-item similarities:
     S = cosine_similarity(G)      
-    # calculate genre distributions for users using training data:
-    user_hist_dist = user_genre_distribution(final_train, G, item_ids, user_ids)
+    # calculate genre distributions for users using training data
+    # NOTE: based on training data, identical weights applied and not by e.g. ratings
+    user_hist_dist = user_genre_distribution(final_train, G, item_ids, user_ids, weight_col= "Rating")
     n_users, n_items = rel_m.shape
     n_items_tot = len(set(catalogue))
-    print(f"* MMR reranking : original pool of recommendations ({N_RECS} items / user) contain {n_items} out of {n_items_tot} items.")
+    print(f"* MMR re-ranking : original pool of recommendations ({N_RECS} items / user) contain {n_items} out of {n_items_tot} items.")
     lams = np.linspace(0, 1, 11)
     rows = []
     for lam in lams: 
@@ -73,34 +75,36 @@ def rerank_with_mmr(data_dir, plot_path):
             "ndcg_at_10": scores["ndcg_at_10"],
             "intra_list_diversity": ild(lists, S),
             "coverage": scores["catalogue_coverage"],
-            "gini": gini(lists, n_items),
+            "gini": gini(lists, n_items_tot),
             "calibration_error": calibration_error(lists, user_hist_dist, G),
         }
         rows.append(result)
-        print(f"\n* MMR reranking : Results for trade-off parameter lambda = {lam}:" )    
+        print(f"\n* MMR re-ranking : Results for trade-off parameter lambda = {lam}:" )    
         print(f" * Precision@10           : {scores['precision_at_10']:.4f}")
         print(f" * Recall@10              : {scores['recall_at_10']:.4f}")
         print(f" * NDCG@10                : {scores['ndcg_at_10']:.4f}")
         print(f" * Intra-list diversity   : {ild(lists, S):.4f}")
         print(f" * Coverage               : {scores["catalogue_coverage"]:.4f}")
-        print(f" * Gini coefficient       : {gini(lists, n_items):.4f}")
+        print(f" * Gini index             : {gini(lists, n_items_tot):.4f}")
         print(f" * Calibration error      : {calibration_error(lists, user_hist_dist, G):.4f}")
 
     results_df = pd.DataFrame(rows).set_index("lambda")
-    print("\n* MMR reranking : Results summary:")
+    print("\n* MMR re-ranking : Results summary:")
     print(results_df.round(4))
-    # plot accuracy vs diversity for lambda values over [0,1]:
-    plot_acc_div_frontier(rel_m, S, n_users, K, plot_path)
+    plot_acc_div_frontier(results_df, plot_path)
+    plot_metrics_vs_lambda(results_df, plot_path, normalize=False, panels=False, figsize=None)
+
     if plot_path is not None:
-        print(f"\n* MMR reranking : Stored accuracy vs. diversity plot to path: {plot_path} / acc_div_frontier.png")
+        print(f"\n* MMR re-ranking : Stored accuracy vs. diversity plot to: {plot_path} / acc_div_frontier.png")
+        print(f"\n* MMR re-ranking : Stored plot showing diversity metrics vs lambda to: {plot_path} / div_metrics.png")
         
 def mmr(rel_u, S, k, lam):
-    ''' Calculate MMR for given value of trade-off parameter lambda (lam). '''
+    ''' Calculate MMR for given value of trade-off parameter lambda (lam) and 
+        choose k recommendations by picking canditates with highest MMR one at time. '''
     cand = np.flatnonzero(~np.isnan(rel_u)).tolist()  # get candidate indices
     lo, hi = np.nanmin(rel_u), np.nanmax(rel_u)
     r = (rel_u - lo) / (hi - lo + 1e-12) # normalise to [0, 1]
     chosen = []
-    # choose k recommendations by picking canditates with highest MMR one at time:
     for _ in range(min(k, len(cand))):
         # calculate maximum similarity to the already picked up items:
         if chosen:
@@ -114,7 +118,7 @@ def mmr(rel_u, S, k, lam):
     return chosen
 
 def ild(lists, S):
-    ''' Calculate average pairwise distance between items in input list (lists). '''
+    ''' Calculate average pairwise distance between items in input list (= 'lists'). '''
     out = []
     for l in lists:
         n = len(l)
@@ -131,39 +135,19 @@ def gini(lists, n_items):
     c = np.bincount(np.concatenate(lists), minlength=n_items).astype(float)
     c.sort()
     n = len(c)
-    return (2 * np.arange(1, n + 1) - n - 1).dot(c) / (n * c.sum())
+    return (2 * np.arange(1, n + 1) - n - 1).dot(c) / ((n - 1) * c.sum())
 
 def calibration_error(lists, user_hist_dist, G, eps=1e-2):
     errs = []
-    for u, l in enumerate(lists):
+    for u, l in enumerate(lists): # loop over users
         p = user_hist_dist[u]   # rows must follow user_ids order
-        q = G[l].sum(0).astype(float)
-        q = q / q.sum()
+        q = G[l].sum(0).astype(float) 
+        q = q / q.sum() # distribution of genres recommended to the user
         q = (1 - eps) * q + eps * p
         m = p > 0
         errs.append(np.sum(p[m] * np.log(p[m] / q[m])))
-    return np.mean(errs)
+    return np.mean(errs) # return average over users
 
-def plot_acc_div_frontier(rel_m, S, n_users, K=10, plot_path=None):
-    ''' calculate and plot accuracy vs diversity over a range of lambda values 
-        (lambda = trade-off parameter). '''
-    lams = np.linspace(0, 1, 11)
-    acc, div = [], []
-    for lam in lams:
-        lists = [mmr(rel_m[u], S, K, lam) for u in range(n_users)]        
-        acc.append(np.mean([rel_m[u, l].sum() for u, l in enumerate(lists)]))
-        div.append(ild(lists, S))
-
-    plt.plot(div, acc, "o-")
-    for lam, x, y in zip(lams, div, acc):
-        plt.annotate(f"{lam:.1f}", (x, y))
-    plt.xlabel("Intra-list diversity"); plt.ylabel("Accuracy (sum of prediction scores @ 10, averaged over users)")
-    plt.grid()
-    if plot_path is not None:
-        plt.savefig(plot_path / "acc_div_frontier.png")
-        plt.close()
-    else:
-        plt.show()
 
 def user_genre_distribution(train, G, item_ids, user_ids, weight_col=None):
     """
